@@ -70,6 +70,8 @@ modify_profile
 
 Opens an editor in order to modify the custom profile for pseudonymization.
 
+Reference to the DICOM library of tags: https://www.dicomlibrary.com/dicom/dicom-tags/
+
 ### Field retention
 
 
