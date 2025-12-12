@@ -2,23 +2,37 @@
 requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pseudo = ["profile.json"]
+
+
 [project]
 name = "dicom_pseudo"
 version = "0.1.0"
+authors = [
+  { name="Loris Giordano", email="loris.giordano@vub.be" },
+]
 description = "Utilities for pseudonymizing DICOM datasets."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.9,<=3.14"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
 dependencies = [
-  "pandas>=1.5",
-  "pydicom>=2.4",
-  "openpyxl>=3.1",
-  "tqdm>=4.66",
+  "pandas >= 1.5",
+  "pydicom >= 2.4",
+  "openpyxl >= 3.1",
+  "tqdm >= 4.66",
 ]
 
 [project.scripts]
 pseudonymize = "dicom_pseudo.pseudonymization:main"
 extract = "dicom_pseudo.extraction:main"
 compare = "dicom_pseudo.compare_nifti:main"
-
-[tool.setuptools.packages.find]
-where = ["src"]
