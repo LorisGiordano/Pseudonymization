@@ -3,6 +3,7 @@ import subprocess
 import platform
 
 def open_with_default_app(path):
+
     system = platform.system()
 
     try:
@@ -14,12 +15,15 @@ def open_with_default_app(path):
             raise Exception("I do not know Linux")
 
     except Exception as e:
-        if system == "Darwin":
-            subprocess.run(["open", "-e", path])
-        elif system == "Windows":
-            subprocess.run(["notepad", path])
-        else: # Linux
-            subprocess.run(["nano", path])
+        try:
+            if system == "Darwin":
+                subprocess.run(["open", "-e", path])
+            elif system == "Windows":
+                subprocess.run(["notepad", path])
+            else: # Linux
+                subprocess.run(["nano", path])
+        except:
+            print(path)
 
 def main():
     open_with_default_app(os.path.join(os.path.dirname(__file__), "profile.json"))
