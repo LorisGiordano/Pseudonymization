@@ -9,7 +9,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-pseudo = ["profile.json"]
+dicom_pseudo = ["profile.json"]
 
 
 [project]
@@ -36,3 +36,4 @@ dependencies = [
 pseudonymize = "dicom_pseudo.pseudonymization:main"
 extract = "dicom_pseudo.extraction:main"
 compare = "dicom_pseudo.compare_nifti:main"
+modify_profile = "dicom_pseudo.modify_profile:main"

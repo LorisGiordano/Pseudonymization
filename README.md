@@ -62,7 +62,17 @@ pseudonymize INPUT_ROOT -o OUTPUT_ROOT -p PROFILE -i IDENTIFIER
     - AgfaID (AccessionNumber / 7fdd,1013)
     - *default = AgfaID*
 
+### Profile
+
+```bash
+modify_profile
+```
+
+Opens an editor in order to modify the custom profile for pseudonymization.
+
 ### Field retention
+
+
 
 
 ## Burnt-in text deidentification
