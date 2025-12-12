@@ -1,0 +1,8 @@
+{
+    "PatientAge":               "0x00101010",
+    "PatientSex":               "0x00100040",
+    "PatientWeight":            "0x00101030",
+    "PatientSize":              "0x00101020",
+    "PatientSizeCodeSequence":  "0x00101021",
+    "PatientBodyMassIndex":     "0x00101022",
+}

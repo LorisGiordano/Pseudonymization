@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dicom_pseudo"
+version = "0.1.0"
+description = "Utilities for pseudonymizing DICOM datasets."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "pandas>=1.5",
+  "pydicom>=2.4",
+  "openpyxl>=3.1",
+  "tqdm>=4.66",
+]
+
+[project.scripts]
+pseudonymize = "dicom_pseudo.pseudonymization:main"
+extract = "dicom_pseudo.extraction:main"
+compare = "dicom_pseudo.compare_nifti:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
