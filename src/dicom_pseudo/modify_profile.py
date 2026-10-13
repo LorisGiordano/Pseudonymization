@@ -2,6 +2,8 @@ import os
 import subprocess
 import platform
 
+from dicom_pseudo.pseudonymization.settings import USER_PROFILE_FILEPATH
+
 def open_with_default_app(path):
 
     system = platform.system()
@@ -26,7 +28,7 @@ def open_with_default_app(path):
             print(path)
 
 def main():
-    open_with_default_app(os.path.join(os.path.dirname(__file__), "profile.json"))
+    open_with_default_app(USER_PROFILE_FILEPATH)
 
 if __name__ == "__main__":
     main()

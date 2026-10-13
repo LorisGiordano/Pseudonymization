@@ -1,0 +1,34 @@
+{
+    "1": {
+        "description": "pseudonymization (age, sex, weight, height)",
+        "fields": {
+            "PatientAge": "0x00101010",
+            "PatientSex": "0x00100040",
+            "PatientWeight": "0x00101030",
+            "PatientSize": "0x00101020",
+            "PatientSizeCodeSequence": "0x00101021",
+            "PatientBodyMassIndex": "0x00101022"
+        }
+    },
+    "2": {
+        "description": "pseudonymization (age, sex, weight, height) + study date",
+        "fields": {
+            "PatientAge": "0x00101010",
+            "PatientSex": "0x00100040",
+            "PatientWeight": "0x00101030",
+            "PatientSize": "0x00101020",
+            "PatientSizeCodeSequence": "0x00101021",
+            "PatientBodyMassIndex": "0x00101022",
+            "StudyDate": "0x00080020",
+            "SeriesDate": "0x00080021"
+        }
+    },
+    "3": {
+        "description": "anonymization 4D (time stamps)",
+        "fields": {
+            "ContentTime": "0x00080033",
+            "AcquisitionTime": "0x00080032",
+            "TimeStamp": "0x00191024"
+        }
+    }
+}

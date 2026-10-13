@@ -1,0 +1,16 @@
+{
+    "PatientID": [
+        "PatientID"
+    ],
+    "StudyID": [
+        "StudyID"
+    ],
+    "AgfaID": [
+        "AccessionNumber",
+        "0x7fdd1013"
+    ],
+    "AccessionNumber": [
+        "AccessionNumber",
+        "0x7fdd1013"
+    ]
+}

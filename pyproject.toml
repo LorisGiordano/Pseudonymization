@@ -9,7 +9,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-dicom_pseudo = ["profile.json"]
+"dicom_pseudo.pseudonymization" = ["config/*.json"]
 
 
 [project]

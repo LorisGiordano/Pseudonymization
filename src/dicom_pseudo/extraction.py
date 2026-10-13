@@ -50,7 +50,7 @@ def _select_profile(profile: int) -> dict:
 
     # select profile from profile.json file
     if profile == 0:
-        profile_filepath = os.path.join(os.path.dirname(__file__), 'profile.json')
+        profile_filepath = os.path.join(os.path.dirname(__file__), 'pseudonymization', 'config', 'profile.json')
         with open(profile_filepath, 'r') as profile_file:
             fields_to_keep = json.load(profile_file)
         

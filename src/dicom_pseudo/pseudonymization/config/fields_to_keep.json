@@ -1,0 +1,70 @@
+{
+    "File integrity": {
+        "SpecificCharacterSet": "0x00080005",
+        "ImageType": "0x00080008",
+        "Manufacturer": "0x00080070",
+        "SOPClassUID": "0x00080016",
+        "SOPInstanceUID": "0x00080018"
+    },
+    "Study, series and frame of reference (UIDs pseudonymized)": {
+        "StudyInstanceUID": "0x0020000d",
+        "SeriesInstanceUID": "0x0020000e",
+        "FrameOfReferenceUID": "0x00200052"
+    },
+    "Image": {
+        "Modality": "0x00080060",
+        "SeriesNumber": "0x00200011",
+        "AcquisitionNumber": "0x00200012",
+        "InstanceNumber": "0x00200013",
+        "PatientPosition": "0x00185100",
+        "ImagePositionPatient": "0x00200032",
+        "ImageOrientationPatient": "0x00200037",
+        "SliceLocation": "0x00201041",
+        "SliceThickness": "0x00180050"
+    },
+    "Acquisition parameters MR (technical, non-identifying)": {
+        "ScanningSequence": "0x00180020",
+        "SequenceVariant": "0x00180021",
+        "ScanOptions": "0x00180022",
+        "MRAcquisitionType": "0x00180023",
+        "RepetitionTime": "0x00180080",
+        "EchoTime": "0x00180081",
+        "InversionTime": "0x00180082",
+        "NumberOfAverages": "0x00180083",
+        "ImagingFrequency": "0x00180084",
+        "EchoNumbers": "0x00180086",
+        "MagneticFieldStrength": "0x00180087",
+        "SpacingBetweenSlices": "0x00180088",
+        "EchoTrainLength": "0x00180091",
+        "PixelBandwidth": "0x00180095",
+        "AcquisitionMatrix": "0x00181310",
+        "InPlanePhaseEncodingDirection": "0x00181312",
+        "FlipAngle": "0x00181314"
+    },
+    "Acquisition parameters CT / X-ray (technical, non-identifying)": {
+        "KVP": "0x00180060",
+        "DataCollectionDiameter": "0x00180090",
+        "ReconstructionDiameter": "0x00181100",
+        "DistanceSourceToDetector": "0x00181110",
+        "GantryDetectorTilt": "0x00181120",
+        "ExposureTime": "0x00181150",
+        "XRayTubeCurrent": "0x00181151",
+        "Exposure": "0x00181152",
+        "ImagerPixelSpacing": "0x00181164",
+        "ConvolutionKernel": "0x00181210",
+        "ViewPosition": "0x00185101"
+    },
+    "Acquisition parameters PET (technical, non-identifying)": {
+        "Units": "0x00541001",
+        "DecayCorrection": "0x00541102"
+    },
+    "Pixel data": {
+        "PixelData": "0x7fe00010"
+    },
+    "Pseudonymization (pseudonym and de-identification flags, set by this tool)": {
+        "PatientName": "0x00100010",
+        "PatientID": "0x00100020",
+        "PatientIdentityRemoved": "0x00120062",
+        "DeidentificationMethod": "0x00120063"
+    }
+}

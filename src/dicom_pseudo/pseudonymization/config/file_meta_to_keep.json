@@ -1,0 +1,6 @@
+{
+    "FileMetaInformationVersion": "0x00020001",
+    "MediaStorageSOPClassUID": "0x00020002",
+    "MediaStorageSOPInstanceUID": "0x00020003",
+    "TransferSyntaxUID": "0x00020010"
+}
