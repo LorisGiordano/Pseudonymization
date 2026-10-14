@@ -27,7 +27,12 @@ from pydicom.sequence import Sequence
 # Dicom2nifti (its warnings are not shown, conversion errors are reported per series)
 import logging
 import dicom2nifti
+from dicom2nifti import common as dicom2nifti_common, image_reorientation
+from dicom2nifti.convert_generic import create_rgba_nifti
 logging.getLogger('dicom2nifti').setLevel(logging.ERROR)
+
+# Nibabel
+import nibabel
 
 # Pseudonymization modules (same profiles, identifiers, pseudonyms, UIDs, output structure and linking table)
 from dicom_pseudo.pseudonymization.settings import FIELDS_TO_KEEP, IDENTIFIERS, KEY_ENV_VARIABLE, LINKAGES, profile_descriptions, select_profile
@@ -190,12 +195,68 @@ def _convert(paths: list[str], output_file: str) -> None:
     finally:
         shutil.rmtree(temp_folder, ignore_errors=True)
 
+def _is_2d(files: list) -> bool:
+    """
+    Check whether a series consists of 2D images that do not form a volume: single-frame images all at the same
+    spatial position, or without spatial position (e.g. projection radiography CR/DX/MG, localizers, repeated slices).
+    """
+
+    if any(int(dicom_data.get('NumberOfFrames', 1) or 1) > 1 for _, dicom_data in files):
+        return False
+    positions = {tuple(round(float(value), 3) for value in dicom_data.get('ImagePositionPatient', []) or []) for _, dicom_data in files}
+    return len(positions) <= 1
+
+def _convert_2d(path: str, output_file: str) -> None:
+    """
+    Convert a single-frame 2D DICOM image to NifTi, following the dicom2nifti conversion (same pixel data scaling,
+    affine, data orientation and header), as dicom2nifti only converts volumes:
+        - pixel data with modality LUT (rescale slope/intercept) applied, stored as x, y, 1 (RGB as RGBA)
+        - affine from ImageOrientationPatient, ImagePositionPatient and PixelSpacing (slice thickness as 3rd dimension);
+          for images without patient coordinates (projection radiography), the image plane is placed at the origin
+          with PixelSpacing (or ImagerPixelSpacing, at the detector) as pixel size
+        - TR/TE, scaling and units in the header, data reoriented to LAS as dicom2nifti does
+
+    Inputs:
+        - path: str = path to DICOM file
+        - output_file: str = path to output NifTi file
+    """
+
+    dicom_data = pydicom.dcmread(path)
+    if int(dicom_data.get('SamplesPerPixel', 1) or 1) == 3 and dicom_data.PhotometricInterpretation != 'RGB':
+        raise ValueError(f"2D color images with photometric interpretation {dicom_data.PhotometricInterpretation} not supported")
+
+    # pixel data (as dicom2nifti)
+    data = dicom2nifti_common.get_volume_pixeldata([dicom_data])
+
+    # geometry: patient coordinates if available, otherwise image plane at the origin
+    if all(keyword in dicom_data for keyword in ('ImageOrientationPatient', 'ImagePositionPatient', 'PixelSpacing')):
+        geometry = dicom_data
+    else:
+        geometry = pydicom.Dataset()
+        geometry.ImageOrientationPatient = [1, 0, 0, 0, 1, 0]
+        geometry.ImagePositionPatient = [0, 0, 0]
+        geometry.PixelSpacing = dicom_data.get('PixelSpacing', None) or dicom_data.get('ImagerPixelSpacing', None) or [1, 1]
+    affine, _ = dicom2nifti_common.create_affine([geometry])
+
+    # NifTi image and header (as dicom2nifti)
+    if dicom_data.get('PhotometricInterpretation', '') == 'RGB':
+        nifti_image = create_rgba_nifti(data, affine)
+    else:
+        nifti_image = nibabel.Nifti1Image(data, affine)
+    if 'RepetitionTime' in dicom_data and 'EchoTime' in dicom_data:
+        dicom2nifti_common.set_tr_te(nifti_image, dicom_data.RepetitionTime, dicom_data.EchoTime)
+    nifti_image.header.set_slope_inter(1, 0)
+    nifti_image.header.set_xyzt_units(2)
+    nifti_image.to_filename(output_file)
+    image_reorientation.reorient_image(nifti_image, output_file)
+
 def extract_series(files: list, output_root: str, identifier: str, key: bytes, profile: int, profile_fields: dict, time_stamp: str = None, linkage: str = 'patient') -> dict:
     """
     Extract the image(s) and metadata of one series to a pseudonymized output folder.
 
     Output folder (same structure as the pseudonymized DICOM files): <pseudonym[:16]>/<StudyInstanceUID>/<SeriesInstanceUID>
-        - image.nii.gz (3D), or <time point>.nii.gz and timestamps.json (4D, profile 3)
+        - image.nii.gz (3D), or <time point>.nii.gz and timestamps.json (4D, profile 3), or for 2D images that do not
+          form a volume: image.nii.gz (single image) or image_<index>.nii.gz (several images, InstanceNumber order)
         - metadata.json (fields of the profile)
 
     Inputs:
@@ -232,9 +293,22 @@ def extract_series(files: list, output_root: str, identifier: str, key: bytes, p
     paths = [path for path, _ in files]
     keyword, labels = _time_positions(files, time_stamp) if profile == 3 else (None, None)
     if keyword is None:
-        _convert(paths, os.path.join(output_directory, 'image.nii.gz'))
         time_points = 0
+        try:
+            _convert(paths, os.path.join(output_directory, 'image.nii.gz'))
+            image_type = '3D'
+        except Exception:
+            # 2D images (not a volume): one NifTi per image
+            if not _is_2d(files):
+                raise
+            if len(paths) == 1:
+                _convert_2d(paths[0], os.path.join(output_directory, 'image.nii.gz'))
+            else:
+                for index, path in enumerate(paths):
+                    _convert_2d(path, os.path.join(output_directory, f'image_{index}.nii.gz'))
+            image_type = '2D'
     else:
+        image_type = '4D'
         sorted_labels = _sort_labels(set(labels))
         for index, label in enumerate(sorted_labels):
             _convert([path for path, file_label in zip(paths, labels) if file_label == label], os.path.join(output_directory, f'{index}.nii.gz'))
@@ -260,6 +334,8 @@ def extract_series(files: list, output_root: str, identifier: str, key: bytes, p
         **{keyword_: str(dicom_data.get(keyword_, '')) for keyword_ in ('Modality', 'SeriesNumber', 'SeriesDescription', 'BurnedInAnnotation')},
         'Output folder': output_folder,
         'Number of files': len(files),
+        'NIfTI': image_type,
+        'Number of NIfTI files': len(paths) if image_type == '2D' else max(time_points, 1),
         'Time points': time_points,
         'Time keyword': keyword or '',
         '_metadata': metadata,
@@ -347,8 +423,8 @@ def extraction(input_root: str, output_root: str, profile: int, identifier: str,
         print(f"WARNING: {len(failed)} series could not be converted, e.g.:")
         for folders, error in failed[:10]:
             print(" -", ';'.join(folders), '->', error)
-    four_d = sum(1 for record in series_records.values() if record['Time points'])
-    print(f"{len(series_records)} series extracted ({four_d} as 4D).")
+    image_types = Counter(record['NIfTI'] for record in series_records.values())
+    print(f"{len(series_records)} series extracted ({', '.join(f'{number} {image_type}' for image_type, number in sorted(image_types.items()))}).")
     print("Extraction done.")
     print(" =>", output_root)
     print(" => linking table:", link_table)
