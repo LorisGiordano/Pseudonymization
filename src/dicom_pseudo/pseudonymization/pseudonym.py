@@ -94,6 +94,28 @@ def study_pseudonym(value: str, study_uid: str, key: bytes) -> str:
 
     return hmac.new(key, f'study:{value}|{study_uid}'.encode('utf-8'), hashlib.sha256).hexdigest()
 
+def compute_pseudonyms(original_id: str, study_uid: str, key: bytes, linkage: str = 'patient') -> tuple[str, str]:
+    """
+    Compute the pseudonym of an identifier value according to the linkage level, and its patient-level pseudonym.
+
+    Inputs:
+        - original_id: str = original identifier value
+        - study_uid: str = original StudyInstanceUID (used for study-level linkage)
+        - key: bytes = secret key
+        - linkage: str = 'patient' or 'study' (default = 'patient')
+
+    Outputs:
+        - pseudo_id: str = pseudonym (patient-level, or study-level for study linkage)
+        - patient_pseudo_id: str = patient-level pseudonym (only stored in the linking table)
+    """
+
+    if linkage not in LINKAGES:
+        raise SystemExit(f"Linkage '{linkage}' not supported. (Use one of: {', '.join(LINKAGES)})")
+
+    patient_pseudo_id = pseudonym(original_id, key)
+    pseudo_id = study_pseudonym(original_id, study_uid, key) if linkage == 'study' else patient_pseudo_id
+    return pseudo_id, patient_pseudo_id
+
 def pseudo_uid(uid: str, key: bytes, scope: str = '') -> str:
     """
     Compute the pseudonymized UID of an original UID with a keyed hash, so that the same original UID is
@@ -166,20 +188,13 @@ def apply_pseudonym(dicom_data: pydicom.dataset.FileDataset, identifier: str, ke
                                   pseudonym (only stored in the linking table) (None if identifier not found)
     """
 
-    if linkage not in LINKAGES:
-        raise SystemExit(f"Linkage '{linkage}' not supported. (Use one of: {', '.join(LINKAGES)})")
-
     original_id, tag = get_identifier_value(dicom_data, identifier, identifiers)
 
     if original_id is None:
         return dicom_data, None
 
-    # patient-level pseudonym, and pseudonym written in the DICOM according to the linkage level
-    patient_pseudo_id = pseudonym(original_id, key)
-    if linkage == 'study':
-        pseudo_id = study_pseudonym(original_id, str(dicom_data.get('StudyInstanceUID', '')), key)
-    else:
-        pseudo_id = patient_pseudo_id
+    # pseudonym written in the DICOM according to the linkage level, and patient-level pseudonym
+    pseudo_id, patient_pseudo_id = compute_pseudonyms(original_id, str(dicom_data.get('StudyInstanceUID', '')), key, linkage)
 
     # remove PHI from the DICOM and write the pseudonym, so images can be linked via the linking table
     dicom_data[tag].value = ''

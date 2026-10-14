@@ -28,7 +28,9 @@
         "fields": {
             "ContentTime": "0x00080033",
             "AcquisitionTime": "0x00080032",
-            "TimeStamp": "0x00191024"
+            "TimeStamp": "0x00191024",
+            "TemporalPositionIdentifier": "0x00200100",
+            "NumberOfTemporalPositions": "0x00200105"
         }
     }
 }

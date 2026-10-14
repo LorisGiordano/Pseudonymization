@@ -33,6 +33,43 @@ def _is_inside(path: str, folder: str) -> bool:
     path, folder = os.path.realpath(path), os.path.realpath(folder)
     return os.path.commonpath([path, folder]) == folder
 
+def check_paths(input_root: str, output_root: str, link_table: str, key_file: str = None) -> tuple[str, str]:
+    """
+    Check the locations of input, output, linking table and key file:
+        - input and output must be separate folders (otherwise original files could be overwritten, or outputs
+          pseudonymized again in later runs)
+        - the key and the linking table must never be stored together with the pseudonymized data
+
+    Inputs:
+        - input_root: str = path to input folder or single DICOM file
+        - output_root: str = path to output folder
+        - link_table: str = path to linking table
+        - key_file: str = path to key file (default = None)
+
+    Outputs:
+        - input_folder: str = input folder (folder of the file for a single input file)
+        - single_file: str = file name of the single input file (None for an input folder)
+    """
+
+    if not os.path.exists(input_root):
+        raise SystemExit(f"Input '{input_root}' does not exist.")
+    single_file = os.path.basename(input_root) if os.path.isfile(input_root) else None
+    input_folder = os.path.dirname(os.path.abspath(input_root)) if single_file else input_root
+    if single_file:
+        if os.path.realpath(output_root) == os.path.realpath(input_folder):
+            raise SystemExit(f"The output folder '{output_root}' must differ from the folder of the input file.")
+    elif _is_inside(output_root, input_folder) or _is_inside(input_folder, output_root):
+        raise SystemExit(f"The output folder '{output_root}' and the input folder '{input_folder}' must not be located inside each other.")
+
+    if link_table is None:
+        raise SystemExit("No linking table given. Use --link-table PATH (outside the output folder).")
+    if _is_inside(link_table, output_root):
+        raise SystemExit(f"The linking table '{link_table}' must not be located inside the output folder '{output_root}'.")
+    if key_file is not None and _is_inside(key_file, output_root):
+        raise SystemExit(f"The key file '{key_file}' must not be located inside the output folder '{output_root}'.")
+
+    return input_folder, single_file
+
 def is_dicom_file(path: str) -> bool:
     """
     Check whether a file is a DICOM file based on its content (not its extension): files with the 'DICM'
@@ -95,10 +132,24 @@ def output_relative_path(dicom_data: pydicom.dataset.FileDataset) -> str:
         - relative_path: str = relative output path
     """
 
-    patient_folder = str(dicom_data.PatientID)[:16]
-    study_folder = str(dicom_data.get('StudyInstanceUID', '') or 'unknown_study')
-    series_folder = str(dicom_data.get('SeriesInstanceUID', '') or 'unknown_series')
-    return os.path.join(patient_folder, study_folder, series_folder, f'{dicom_data.SOPInstanceUID}.dcm')
+    series_folder = series_relative_folder(str(dicom_data.PatientID), str(dicom_data.get('StudyInstanceUID', '')), str(dicom_data.get('SeriesInstanceUID', '')))
+    return os.path.join(series_folder, f'{dicom_data.SOPInstanceUID}.dcm')
+
+def series_relative_folder(pseudo_id: str, pseudo_study_uid: str, pseudo_series_uid: str) -> str:
+    """
+    Build the relative output folder of a series from pseudonymized values only:
+    <pseudonym (first 16 characters)>/<StudyInstanceUID>/<SeriesInstanceUID>
+
+    Inputs:
+        - pseudo_id: str = pseudonym (written in PatientID)
+        - pseudo_study_uid: str = pseudonymized StudyInstanceUID ('' if missing)
+        - pseudo_series_uid: str = pseudonymized SeriesInstanceUID ('' if missing)
+
+    Outputs:
+        - relative_folder: str = relative output folder
+    """
+
+    return os.path.join(pseudo_id[:16], pseudo_study_uid or 'unknown_study', pseudo_series_uid or 'unknown_series')
 
 def pseudonymize_dicom(input_path: str, output_root: str, identifier: str, key: bytes, deidentification_method: str, fields_to_keep: dict, groups_to_keep: set, linkage: str = 'patient', written_paths: set = None) -> dict:
     """
@@ -247,25 +298,8 @@ def pseudonymization(input_root: str, output_root: str, profile: int, identifier
     if linkage not in LINKAGES:
         raise SystemExit(f"Linkage '{linkage}' not supported. (Use one of: {', '.join(LINKAGES)})")
 
-    # input and output must be separate folders (otherwise original files could be overwritten, or outputs
-    # pseudonymized again in later runs)
-    if not os.path.exists(input_root):
-        raise SystemExit(f"Input '{input_root}' does not exist.")
-    single_file = os.path.basename(input_root) if os.path.isfile(input_root) else None
-    input_folder = os.path.dirname(os.path.abspath(input_root)) if single_file else input_root
-    if single_file:
-        if os.path.realpath(output_root) == os.path.realpath(input_folder):
-            raise SystemExit(f"The output folder '{output_root}' must differ from the folder of the input file.")
-    elif _is_inside(output_root, input_folder) or _is_inside(input_folder, output_root):
-        raise SystemExit(f"The output folder '{output_root}' and the input folder '{input_folder}' must not be located inside each other.")
-
-    # the key and the linking table must never be stored together with the pseudonymized data
-    if link_table is None:
-        raise SystemExit("No linking table given. Use --link-table PATH (outside the output folder).")
-    if _is_inside(link_table, output_root):
-        raise SystemExit(f"The linking table '{link_table}' must not be located inside the output folder '{output_root}'.")
-    if key_file is not None and _is_inside(key_file, output_root):
-        raise SystemExit(f"The key file '{key_file}' must not be located inside the output folder '{output_root}'.")
+    # check input, output, linking table and key locations, and load the key
+    input_folder, single_file = check_paths(input_root, output_root, link_table, key_file)
     key = load_key(key_file)
 
     # build output directories
