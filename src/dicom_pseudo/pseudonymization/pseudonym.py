@@ -12,7 +12,7 @@ from pydicom.tag import Tag
 from pydicom.uid import UID_dictionary
 
 # Settings
-from .settings import IDENTIFIERS, KEY_ENV_VARIABLE, UIDS_NOT_REMAPPED
+from .settings import IDENTIFIERS, KEY_ENV_VARIABLE, LINKAGES, UIDS_NOT_REMAPPED
 
 
 """ SECRET KEY """
@@ -78,20 +78,39 @@ def pseudonym(value: str, key: bytes) -> str:
 
     return hmac.new(key, value.encode('utf-8'), hashlib.sha256).hexdigest()
 
-def pseudo_uid(uid: str, key: bytes) -> str:
+def study_pseudonym(value: str, study_uid: str, key: bytes) -> str:
+    """
+    Compute the study-level pseudonym of an identifier value: different for each study of the same identifier
+    value, so that studies of the same patient cannot be linked without the key.
+
+    Inputs:
+        - value: str = original identifier value
+        - study_uid: str = original StudyInstanceUID
+        - key: bytes = secret key
+
+    Outputs:
+        - pseudonym: str = hexadecimal pseudonym
+    """
+
+    return hmac.new(key, f'study:{value}|{study_uid}'.encode('utf-8'), hashlib.sha256).hexdigest()
+
+def pseudo_uid(uid: str, key: bytes, scope: str = '') -> str:
     """
     Compute the pseudonymized UID of an original UID with a keyed hash, so that the same original UID is
-    always replaced by the same pseudonymized UID (across files and runs using the same key).
+    always replaced by the same pseudonymized UID (across files and runs using the same key and scope).
 
     Inputs:
         - uid: str = original UID
         - key: bytes = secret key
+        - scope: str = scope of the mapping (default = '' => global; original StudyInstanceUID for study-level
+                       linkage, so that UIDs shared between studies are replaced differently in each study)
 
     Outputs:
         - pseudo_uid: str = pseudonymized UID (UUID-derived '2.25.<128-bit integer>' form, max 44 characters)
     """
 
-    digest = hmac.new(key, b'uid:' + uid.encode(), hashlib.sha256).hexdigest()
+    message = b'uid:' + (scope.encode() + b'|' if scope else b'') + uid.encode()
+    digest = hmac.new(key, message, hashlib.sha256).hexdigest()
     return '2.25.' + str(int(digest[:32], 16))
 
 
@@ -127,7 +146,7 @@ def get_identifier_value(dicom_data: pydicom.dataset.FileDataset, identifier: st
 
     return None, None
 
-def apply_pseudonym(dicom_data: pydicom.dataset.FileDataset, identifier: str, key: bytes, deidentification_method: str = '', identifiers: dict = IDENTIFIERS) -> tuple[pydicom.dataset.FileDataset, dict]:
+def apply_pseudonym(dicom_data: pydicom.dataset.FileDataset, identifier: str, key: bytes, deidentification_method: str = '', linkage: str = 'patient', identifiers: dict = IDENTIFIERS) -> tuple[pydicom.dataset.FileDataset, dict]:
     """
     Pseudonymize the chosen identifier with a keyed hash, blank it in the DICOM, write the pseudonym in
     PatientID and PatientName, flag the file as de-identified, and return the mapping.
@@ -137,19 +156,30 @@ def apply_pseudonym(dicom_data: pydicom.dataset.FileDataset, identifier: str, ke
         - identifier: str = name of the identifier (key of identifiers)
         - key: bytes = secret key
         - deidentification_method: str = description stored in DeidentificationMethod (default = '')
+        - linkage: str = 'patient' (one pseudonym per identifier value) or 'study' (one pseudonym per study,
+                         computed from the identifier value and the original StudyInstanceUID) (default = 'patient')
         - identifiers: dict = candidate tags for each identifier (default = IDENTIFIERS)
 
     Outputs:
         - dicom_data: pydicom.dataset.FileDataset = dicom file object
-        - identifier_link: dict = link between identifier and pseudo identifier (None if identifier not found)
+        - identifier_link: dict = link between identifier, pseudonym written in the DICOM and patient-level
+                                  pseudonym (only stored in the linking table) (None if identifier not found)
     """
+
+    if linkage not in LINKAGES:
+        raise SystemExit(f"Linkage '{linkage}' not supported. (Use one of: {', '.join(LINKAGES)})")
 
     original_id, tag = get_identifier_value(dicom_data, identifier, identifiers)
 
     if original_id is None:
         return dicom_data, None
 
-    pseudo_id = pseudonym(original_id, key)
+    # patient-level pseudonym, and pseudonym written in the DICOM according to the linkage level
+    patient_pseudo_id = pseudonym(original_id, key)
+    if linkage == 'study':
+        pseudo_id = study_pseudonym(original_id, str(dicom_data.get('StudyInstanceUID', '')), key)
+    else:
+        pseudo_id = patient_pseudo_id
 
     # remove PHI from the DICOM and write the pseudonym, so images can be linked via the linking table
     dicom_data[tag].value = ''
@@ -162,7 +192,9 @@ def apply_pseudonym(dicom_data: pydicom.dataset.FileDataset, identifier: str, ke
 
     identifier_link = {
         f'Original {identifier}': [original_id],
-        f'Pseudonym {identifier}': [pseudo_id]
+        f'Pseudonym {identifier}': [pseudo_id],
+        f'Patient pseudonym {identifier}': [patient_pseudo_id],
+        'Linkage': [linkage]
     }
 
     return dicom_data, identifier_link
@@ -170,7 +202,7 @@ def apply_pseudonym(dicom_data: pydicom.dataset.FileDataset, identifier: str, ke
 
 """ UIDS """
 
-def remap_uids(dataset: pydicom.dataset.Dataset, key: bytes, uids_not_remapped: set = UIDS_NOT_REMAPPED) -> None:
+def remap_uids(dataset: pydicom.dataset.Dataset, key: bytes, scope: str = '', uids_not_remapped: set = UIDS_NOT_REMAPPED) -> None:
     """
     Replace all instance UIDs of a dataset (including those nested in sequences, e.g. references to other
     instances, series or frames of reference) by their pseudonymized UIDs. Well-known UIDs (SOP classes,
@@ -179,6 +211,7 @@ def remap_uids(dataset: pydicom.dataset.Dataset, key: bytes, uids_not_remapped: 
     Inputs:
         - dataset: pydicom.dataset.Dataset = dataset to modify in place
         - key: bytes = secret key
+        - scope: str = scope of the UID mapping (default = '' => global, see pseudo_uid)
         - uids_not_remapped: set = keywords of UID attributes to keep (default = UIDS_NOT_REMAPPED)
     """
 
@@ -186,7 +219,7 @@ def remap_uids(dataset: pydicom.dataset.Dataset, key: bytes, uids_not_remapped: 
         uid = str(uid).strip(' \x00')
         if not uid or uid in UID_dictionary:
             return uid
-        return pseudo_uid(uid, key)
+        return pseudo_uid(uid, key, scope)
 
     for elem in dataset.iterall():
         if elem.VR != 'UI' or elem.keyword in uids_not_remapped or elem.value in (None, ''):

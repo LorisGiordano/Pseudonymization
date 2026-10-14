@@ -20,6 +20,11 @@ USER_PROFILE_FILEPATH = os.path.join(CONFIG_FOLDER, 'profile.json')
 # Environment variable that can hold the secret pseudonymization key (alternative to --key-file)
 KEY_ENV_VARIABLE = 'DICOM_PSEUDO_KEY'
 
+# Linkage levels of the pseudonyms:
+#   - patient: one pseudonym per patient (identifier), studies of the same patient can be linked
+#   - study: one pseudonym per study, studies of the same patient cannot be linked without the key
+LINKAGES = ('patient', 'study')
+
 # Version of this tool, recorded in the DeidentificationMethod of the pseudonymized files
 try:
     TOOL_VERSION = version('dicom_pseudo')

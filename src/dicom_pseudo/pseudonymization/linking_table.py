@@ -29,7 +29,8 @@ def save_link_table(link_table: str, series_records: dict, identifier: str) -> N
     if os.path.exists(link_table):
         existing = pd.read_csv(link_table, dtype=str) if is_csv else pd.read_excel(link_table, dtype=str)
         df = pd.concat([existing, df], ignore_index=True)
-        df = df.drop_duplicates(subset=[f'Original {identifier}', 'Original SeriesInstanceUID', 'Output folder'], keep='last')
+        subset = [column for column in (f'Original {identifier}', 'Original SeriesInstanceUID', 'Input folder', 'Output folder') if column in df.columns]
+        df = df.drop_duplicates(subset=subset, keep='last')
 
     os.makedirs(os.path.dirname(os.path.abspath(link_table)), exist_ok=True)
     if is_csv:
