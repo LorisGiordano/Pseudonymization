@@ -1,3 +1,7 @@
+"""
+Configuration loaded from the JSON files in config/ (fields, groups, identifiers, profiles) and general settings.
+"""
+
 """ IMPORTS """
 
 # Pre-installed packages

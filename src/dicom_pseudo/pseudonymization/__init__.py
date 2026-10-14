@@ -1,13 +1,13 @@
 """
-Pseudonymization of DICOM datasets.
+Pseudonymization of DICOM datasets (pseudonymized DICOM files).
 
 Modules:
-    - settings: configuration (tags, groups, identifiers, profiles) loaded from the JSON files in config/
-    - pseudonym: secret key, pseudonyms of identifiers and UIDs
+    - deidentification: pseudonym and de-identification flags, pseudonymized UIDs written in a dataset
     - sanitization: removal/emptying of the fields that are not kept, private tags and file meta information
-    - linking_table: linking table between original and pseudo identifiers
-    - pipeline: pseudonymization of DICOM files and folders
+    - pipeline: pseudonymization of DICOM files
     - cli: command line interface
+
+Shared modules (settings, pseudonyms, identity, files, paths, linking table, report) are in dicom_pseudo.core.
 """
 
 from .pipeline import pseudonymization

@@ -2,7 +2,7 @@ import os
 import subprocess
 import platform
 
-from dicom_pseudo.pseudonymization.settings import USER_PROFILE_FILEPATH
+from dicom_pseudo.core.settings import USER_PROFILE_FILEPATH
 
 def open_with_default_app(path):
 

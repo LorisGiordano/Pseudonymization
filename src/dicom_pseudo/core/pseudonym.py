@@ -1,3 +1,7 @@
+"""
+Secret key and keyed hashes (HMAC-SHA256) used for all pseudonyms and pseudonymized UIDs.
+"""
+
 """ IMPORTS """
 
 # Pre-installed packages
@@ -7,12 +11,10 @@ import hmac
 import secrets
 
 # Pydicom
-import pydicom
-from pydicom.tag import Tag
 from pydicom.uid import UID_dictionary
 
 # Settings
-from .settings import IDENTIFIERS, KEY_ENV_VARIABLE, LINKAGES, UIDS_NOT_REMAPPED
+from .settings import KEY_ENV_VARIABLE, LINKAGES
 
 
 """ SECRET KEY """
@@ -135,111 +137,21 @@ def pseudo_uid(uid: str, key: bytes, scope: str = '') -> str:
     digest = hmac.new(key, message, hashlib.sha256).hexdigest()
     return '2.25.' + str(int(digest[:32], 16))
 
-
-""" IDENTIFIER """
-
-def get_identifier_value(dicom_data: pydicom.dataset.FileDataset, identifier: str, identifiers: dict = IDENTIFIERS) -> tuple[str, Tag]:
+def remap_uid(uid: str, key: bytes, scope: str = '') -> str:
     """
-    Get the value of the chosen identifier from the first candidate tag that holds a non-empty value.
+    Get the pseudonymized UID to be written for an original UID value: well-known UIDs (SOP classes, transfer
+    syntaxes, ... of the DICOM standard) and empty values are kept, all other UIDs are pseudonymized.
 
     Inputs:
-        - dicom_data: pydicom.dataset.FileDataset = dicom file object (in which the identifier is present)
-        - identifier: str = name of the identifier (key of identifiers)
-        - identifiers: dict = candidate tags for each identifier (default = IDENTIFIERS)
+        - uid: str = original UID value
+        - key: bytes = secret key
+        - scope: str = scope of the mapping (default = '' => global, see pseudo_uid)
 
     Outputs:
-        - value: str = identifier value (None if not found)
-        - tag: Tag = tag in which the identifier value was found (None if not found)
+        - uid: str = UID to be written
     """
 
-    if identifier not in identifiers:
-        raise SystemExit(f"Identifier '{identifier}' not supported. (Use one of: {', '.join(identifiers)})")
-
-    for tag in identifiers[identifier]:
-        element = dicom_data.get(Tag(tag), None)
-        if element is None or element.value is None:
-            continue
-        value = element.value
-        if isinstance(value, bytes):
-            value = value.decode('utf-8', errors='replace')
-        value = str(value).strip(' \x00')
-        if value:
-            return value, Tag(tag)
-
-    return None, None
-
-def apply_pseudonym(dicom_data: pydicom.dataset.FileDataset, identifier: str, key: bytes, deidentification_method: str = '', linkage: str = 'patient', identifiers: dict = IDENTIFIERS) -> tuple[pydicom.dataset.FileDataset, dict]:
-    """
-    Pseudonymize the chosen identifier with a keyed hash, blank it in the DICOM, write the pseudonym in
-    PatientID and PatientName, flag the file as de-identified, and return the mapping.
-
-    Inputs:
-        - dicom_data: pydicom.dataset.FileDataset = dicom file object (in which the identifier is present)
-        - identifier: str = name of the identifier (key of identifiers)
-        - key: bytes = secret key
-        - deidentification_method: str = description stored in DeidentificationMethod (default = '')
-        - linkage: str = 'patient' (one pseudonym per identifier value) or 'study' (one pseudonym per study,
-                         computed from the identifier value and the original StudyInstanceUID) (default = 'patient')
-        - identifiers: dict = candidate tags for each identifier (default = IDENTIFIERS)
-
-    Outputs:
-        - dicom_data: pydicom.dataset.FileDataset = dicom file object
-        - identifier_link: dict = link between identifier, pseudonym written in the DICOM and patient-level
-                                  pseudonym (only stored in the linking table) (None if identifier not found)
-    """
-
-    original_id, tag = get_identifier_value(dicom_data, identifier, identifiers)
-
-    if original_id is None:
-        return dicom_data, None
-
-    # pseudonym written in the DICOM according to the linkage level, and patient-level pseudonym
-    pseudo_id, patient_pseudo_id = compute_pseudonyms(original_id, str(dicom_data.get('StudyInstanceUID', '')), key, linkage)
-
-    # remove PHI from the DICOM and write the pseudonym, so images can be linked via the linking table
-    dicom_data[tag].value = ''
-    dicom_data.PatientID = pseudo_id
-    dicom_data.PatientName = pseudo_id
-
-    # flag the file as de-identified (DICOM PS3.15 Annex E)
-    dicom_data.PatientIdentityRemoved = 'YES'
-    dicom_data.DeidentificationMethod = deidentification_method
-
-    identifier_link = {
-        f'Original {identifier}': [original_id],
-        f'Pseudonym {identifier}': [pseudo_id],
-        f'Patient pseudonym {identifier}': [patient_pseudo_id],
-        'Linkage': [linkage]
-    }
-
-    return dicom_data, identifier_link
-
-
-""" UIDS """
-
-def remap_uids(dataset: pydicom.dataset.Dataset, key: bytes, scope: str = '', uids_not_remapped: set = UIDS_NOT_REMAPPED) -> None:
-    """
-    Replace all instance UIDs of a dataset (including those nested in sequences, e.g. references to other
-    instances, series or frames of reference) by their pseudonymized UIDs. Well-known UIDs (SOP classes,
-    transfer syntaxes, ...) are kept.
-
-    Inputs:
-        - dataset: pydicom.dataset.Dataset = dataset to modify in place
-        - key: bytes = secret key
-        - scope: str = scope of the UID mapping (default = '' => global, see pseudo_uid)
-        - uids_not_remapped: set = keywords of UID attributes to keep (default = UIDS_NOT_REMAPPED)
-    """
-
-    def remap(uid):
-        uid = str(uid).strip(' \x00')
-        if not uid or uid in UID_dictionary:
-            return uid
-        return pseudo_uid(uid, key, scope)
-
-    for elem in dataset.iterall():
-        if elem.VR != 'UI' or elem.keyword in uids_not_remapped or elem.value in (None, ''):
-            continue
-        if elem.VM > 1:
-            elem.value = [remap(uid) for uid in elem.value]
-        else:
-            elem.value = remap(elem.value)
+    uid = str(uid).strip(' \x00')
+    if not uid or uid in UID_dictionary:
+        return uid
+    return pseudo_uid(uid, key, scope)

@@ -1,3 +1,7 @@
+"""
+Removal or emptying of the DICOM fields that are not kept, private tags and file meta information.
+"""
+
 """ IMPORTS """
 
 # Pydicom
@@ -7,8 +11,8 @@ from pydicom.sequence import Sequence
 from pydicom.tag import Tag
 from pydicom.uid import ExplicitVRLittleEndian, PYDICOM_IMPLEMENTATION_UID
 
-# Settings
-from .settings import FILE_META_TO_KEEP, REPEATING_GROUPS_TO_REMOVE
+# Core modules
+from ..core.settings import FILE_META_TO_KEEP, REPEATING_GROUPS_TO_REMOVE
 
 
 """ FUNCTIONS """
