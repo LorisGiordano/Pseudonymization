@@ -75,6 +75,27 @@ def _to_int(value, name: str, filepath: str) -> int:
     except Exception:
         raise SystemExit(f"Invalid tag '{value}' for '{name}' in configuration file '{filepath}'.")
 
+def _flatten_tags(entries: dict, filepath: str) -> dict:
+    """
+    Convert a dictionary of DICOM keywords (keys) and tags (values) to tags as int. The entries may be grouped by
+    category (nested dictionaries), which are flattened.
+
+    Inputs:
+        - entries: dict = dictionary of DICOM keywords (keys) and tags, or categories of them (values)
+        - filepath: str = path to the configuration file (for error messages)
+
+    Outputs:
+        - tags: dict = dictionary of DICOM keywords (keys) and their tags as int (values)
+    """
+
+    tags = {}
+    for name, value in entries.items():
+        if isinstance(value, dict):
+            tags.update(_flatten_tags(value, filepath))
+        else:
+            tags[name] = _to_int(value, name, filepath)
+    return tags
+
 def load_tags(filepath: str) -> dict:
     """
     Load a dictionary of DICOM keywords (keys) and tags (values) from a JSON file. The entries may be grouped
@@ -87,16 +108,7 @@ def load_tags(filepath: str) -> dict:
         - tags: dict = dictionary of DICOM keywords (keys) and their tags as int (values)
     """
 
-    def flatten(entries: dict) -> dict:
-        tags = {}
-        for name, value in entries.items():
-            if isinstance(value, dict):
-                tags.update(flatten(value))
-            else:
-                tags[name] = _to_int(value, name, filepath)
-        return tags
-
-    return flatten(_load_json(filepath))
+    return _flatten_tags(_load_json(filepath), filepath)
 
 def _config(filename: str) -> str:
     """
@@ -163,8 +175,7 @@ def select_profile(profile: int, fields_to_keep: dict = FIELDS_TO_KEEP, groups_t
 
     # select predefined profile
     elif str(profile) in PROFILES:
-        filepath = _config('profiles.json')
-        extra_fields_to_keep = {name: _to_int(tag, name, filepath) for name, tag in PROFILES[str(profile)]['fields'].items()}
+        extra_fields_to_keep = _flatten_tags(PROFILES[str(profile)]['fields'], _config('profiles.json'))
 
     # other profile parameter inputs are incorrect
     else:
