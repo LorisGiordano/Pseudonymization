@@ -159,5 +159,5 @@ def extraction(input_root: str, output_root: str, profile: int = 1, time_stamp: 
 
     # report
     image_types = Counter(row['NIfTI'] for row in overview)
-    summary = f"{len(overview)} series extracted ({', '.join(f'{number} {image_type}' for image_type, number in sorted(image_types.items()))})."
+    summary = f"{len(overview)} series extracted" + (f" ({', '.join(f'{number} {image_type}' for image_type, number in sorted(image_types.items()))})." if overview else '.')
     report({}, [], failed, '', summary, 'Extraction', output_root)

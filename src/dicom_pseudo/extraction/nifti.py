@@ -11,6 +11,9 @@ import json
 import shutil
 import tempfile
 
+# Numpy
+import numpy
+
 # Pydicom
 import pydicom
 
@@ -43,7 +46,10 @@ def convert_volume(paths: list[str], output_file: str) -> None:
     try:
         for i, path in enumerate(paths):
             shutil.copyfile(path, os.path.join(temp_folder, f'{i:06d}.dcm'))
-        dicom2nifti.dicom_series_to_nifti(temp_folder, output_file)
+        # numerical warnings of dicom2nifti (e.g. division by zero for images at the same position) are not shown,
+        # conversion errors are reported per series
+        with numpy.errstate(divide='ignore', invalid='ignore'):
+            dicom2nifti.dicom_series_to_nifti(temp_folder, output_file)
     finally:
         shutil.rmtree(temp_folder, ignore_errors=True)
 

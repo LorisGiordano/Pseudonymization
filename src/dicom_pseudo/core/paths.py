@@ -83,7 +83,7 @@ def series_relative_folder(pseudo_id: str, pseudo_study_uid: str, pseudo_series_
     """
     Build the relative output folder of a series from pseudonymized values only (nothing of the input path is kept,
     as folder and file names can contain identifiers, names or dates):
-    <pseudonym (first 16 characters)>/<StudyInstanceUID>/<SeriesInstanceUID>
+    <pseudonym (first 32 characters)>/<StudyInstanceUID>/<SeriesInstanceUID>
 
     Inputs:
         - pseudo_id: str = pseudonym (written in PatientID)
@@ -94,4 +94,4 @@ def series_relative_folder(pseudo_id: str, pseudo_study_uid: str, pseudo_series_
         - relative_folder: str = relative output folder
     """
 
-    return os.path.join(pseudo_id[:16], pseudo_study_uid or 'unknown_study', pseudo_series_uid or 'unknown_series')
+    return os.path.join(pseudo_id[:32], pseudo_study_uid or 'unknown_study', pseudo_series_uid or 'unknown_series')

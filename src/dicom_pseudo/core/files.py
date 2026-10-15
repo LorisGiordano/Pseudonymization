@@ -6,6 +6,7 @@ Discovery of the DICOM files of an input (detected by content), grouping by seri
 
 # Pre-installed packages
 import os
+import glob
 from collections import defaultdict
 
 # Pydicom
@@ -72,6 +73,28 @@ def find_dicom_files(input_folder: str, single_file: str = None) -> list[str]:
     return [os.path.join(root, file) for root, dirs, files in os.walk(input_folder) for file in sorted(files)
             if is_dicom_file(os.path.join(root, file))]
 
+def iter_dicom_folders(input_folder: str, single_file: str = None):
+    """
+    Iterate over the folders of an input containing DICOM files, one folder at a time (folders in os.walk order, files
+    sorted by name), without listing all the files of the input in memory (for huge datasets).
+
+    Inputs:
+        - input_folder: str = path to input folder (folder of the file for a single input file)
+        - single_file: str = file name of the single input file (default = None => all folders of the input)
+
+    Outputs (generator):
+        - folder: str = relative folder ('.' for the input folder itself)
+        - dicom_files: list[str] = paths to the DICOM files of the folder
+    """
+
+    if single_file:
+        yield '.', [os.path.join(input_folder, single_file)]
+        return
+    for root, dirs, files in os.walk(input_folder):
+        dicom_files = [os.path.join(root, file) for file in sorted(files) if is_dicom_file(os.path.join(root, file))]
+        if dicom_files:
+            yield os.path.relpath(root, input_folder), dicom_files
+
 def group_by_series(dicom_files: list[str]) -> dict:
     """
     Group DICOM files by series (a folder can contain several series, a series can be split over folders).
@@ -94,21 +117,27 @@ def group_by_series(dicom_files: list[str]) -> dict:
 
 def save_dicom(dicom_data: pydicom.dataset.FileDataset, output_path: str) -> None:
     """
-    Save a DICOM file in standard DICOM file format (preamble, prefix and file meta information), partially
-    written files are removed.
+    Save a DICOM file in standard DICOM file format (preamble, prefix and file meta information). The file is written
+    atomically: first to a temporary file in the same folder, then renamed, so that an interrupted process never
+    leaves a partially written file.
 
     Inputs:
         - dicom_data: pydicom.dataset.FileDataset = dicom file object
         - output_path: str = path to output file (folders are created if needed)
     """
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    folder = os.path.dirname(output_path)
+    os.makedirs(folder, exist_ok=True)
+    temporary_path = os.path.join(folder, f'.{os.path.basename(output_path)}.tmp-{os.getpid()}')
     try:
         if int(pydicom.__version__.split('.')[0]) >= 3:
-            dicom_data.save_as(output_path, enforce_file_format=True)
+            dicom_data.save_as(temporary_path, enforce_file_format=True)
         else:
-            dicom_data.save_as(output_path, write_like_original=False)
-    except Exception:
-        if os.path.exists(output_path):
-            os.remove(output_path)
+            dicom_data.save_as(temporary_path, write_like_original=False)
+        os.replace(temporary_path, output_path)
+        for stale_path in glob.glob(os.path.join(glob.escape(folder), f'.{glob.escape(os.path.basename(output_path))}.tmp-*')):
+            os.remove(stale_path)                        # left by an interrupted process writing the same file earlier
+    except BaseException:
+        if os.path.exists(temporary_path):
+            os.remove(temporary_path)
         raise
