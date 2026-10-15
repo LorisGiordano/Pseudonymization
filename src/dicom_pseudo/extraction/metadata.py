@@ -18,6 +18,7 @@ from pydicom.sequence import Sequence
 
 # Core modules
 from ..core.settings import FIELDS_TO_KEEP, select_profile
+from ..core.tables import read_table, write_table
 
 
 """ FUNCTIONS """
@@ -79,12 +80,12 @@ def write_metadata(metadata: dict, output_directory: str) -> None:
 
 def save_metadata_table(metadata_table: str, rows: list[dict]) -> None:
     """
-    Save the overview table of the metadata (pseudonyms and profile fields only, no original identifiers), merged
-    with the existing table if any.
+    Save the overview table of the extracted series (folder, NifTi information and profile fields), merged with the
+    existing table if any.
 
     Inputs:
         - metadata_table: str = path to metadata table (.xlsx)
-        - rows: list[dict] = one row per series (with 'Output folder')
+        - rows: list[dict] = one row per series (with 'Folder')
     """
 
     if not rows:
@@ -92,5 +93,5 @@ def save_metadata_table(metadata_table: str, rows: list[dict]) -> None:
     rows = [{key: json.dumps(value) if isinstance(value, (list, dict)) else value for key, value in row.items()} for row in rows]
     df = pd.DataFrame(rows)
     if os.path.exists(metadata_table):
-        df = pd.concat([pd.read_excel(metadata_table), df], ignore_index=True).drop_duplicates(subset=['Output folder'], keep='last')
-    df.to_excel(metadata_table, index=False)
+        df = pd.concat([read_table(metadata_table), df], ignore_index=True).drop_duplicates(subset=['Folder'], keep='last')
+    write_table(df, metadata_table)

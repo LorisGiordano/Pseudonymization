@@ -20,7 +20,7 @@ import pydicom
 from pydicom.tag import Tag
 
 # Core modules
-from ..core.settings import IDENTIFIERS, LINKAGES, TOOL_VERSION, select_profile
+from ..core.settings import IDENTIFIERS, LINKAGES, TOOL_NAME, TOOL_VERSION, select_profile
 from ..core.pseudonym import load_key
 from ..core.identity import identify
 from ..core.files import find_dicom_files, save_dicom
@@ -120,7 +120,7 @@ def pseudonymization(input_root: str, output_root: str, profile: int, identifier
 
     # fields to keep and description of the de-identification
     fields_to_keep, groups_to_keep = select_profile(profile)
-    deidentification_method = f"dicom_pseudo {TOOL_VERSION} profile {profile} {identifier} {linkage}-level"[:64]  # LO: max 64 chars
+    deidentification_method = f"{TOOL_NAME} {TOOL_VERSION} profile {profile} {identifier} {linkage}-level"[:64]  # LO: max 64 chars
 
     # DICOM files (detected by content)
     dicom_files = find_dicom_files(input_folder, single_file)

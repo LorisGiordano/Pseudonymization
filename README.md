@@ -3,16 +3,17 @@
 Pseudonymization of DICOM datasets for research. The package provides two pipelines, which you can use from the
 command line or as a Python API:
 
-- **Pseudonymization** (`pseudonymize`): writes pseudonymized DICOM files. It keeps the image and the fields of the
-  selected profile, replaces the patient identifier and all UIDs with keyed pseudonyms, and removes or empties
-  everything else.
-- **Extraction** (`extract`): writes pseudonymized NIfTI images (2D, 3D or 4D), together with the profile's metadata
-  as JSON.
+- **Pseudonymization** (`pseudonymize`): writes pseudonymized DICOM files. 
+  It keeps the image and the fields of the selected profile, replaces the patient identifier and all UIDs with keyed pseudonyms, and removes or empties everything else.
+- **Extraction** (`extract`): converts each DICOM series to NIfTI images (2D, 3D or 4D), together with the profile's
+  metadata as JSON, reproducing the folder structure of its input. 
+  It doesn't pseudonymize: run it on the pseudonymized DICOM files.
 
-Both use the same secret key, so they give the same pseudonyms and the same output folder structure. Both write a
-**linking table** between original and pseudonymized identifiers, which must be kept separately from the data. Two
-helper commands complete the toolkit: `redact` removes text burned into the pixel data, and `compare` compares two
-NIfTI files.
+Pseudonymization writes a **linking table** between original and pseudonymized identifiers, which must be kept separately from the data. 
+Two helper commands complete the toolkit: `redact` removes text burned into the pixel data, and `compare` compares two NIfTI files.
+
+Recommended workflow: `pseudonymize` (raw DICOM → pseudonymized DICOM) → optionally `redact` → `extract` (pseudonymized DICOM → NIfTI). 
+The extraction then only sees pseudonymized data, and needs no access to the raw data, the key or the linking table.
 
 ## Contents
 
@@ -31,7 +32,7 @@ NIfTI files.
 ## Install
 
 ```bash
-conda create -n pseudo python=3.12.10
+conda create -n pseudo python=3.12
 conda activate pseudo
 pip install --upgrade pip
 pip install .
@@ -63,11 +64,11 @@ brew install tesseract   # Tesseract OCR engine; on Linux: apt install tesseract
 # pseudonymized DICOM files
 pseudonymize /data/study -o /release/dicom -k /secrets/project.key -l /secrets/linking_table.xlsx
 
-# pseudonymized NIfTI images and metadata (same key: same pseudonyms and folders)
-extract /data/study -o /release/nifti -k /secrets/project.key -l /secrets/linking_table_nifti.xlsx
+# NIfTI images and metadata, from the pseudonymized DICOM files (same folder structure)
+extract /release/dicom -o /release/nifti
 ```
 
-The key file is created at the first run. Keep it, and the linking tables, in a protected location outside the data you share. 
+The key file is created at the first run. Keep it, and the linking table, in a protected location outside the data you share. 
 The same key gives the same pseudonyms in later runs.
 
 ## Concepts
@@ -121,6 +122,7 @@ Output folders and file names are rebuilt from pseudonymized values only, becaus
 OUTPUT/<pseudonym, first 16 characters>/<pseudonymized StudyInstanceUID>/<pseudonymized SeriesInstanceUID>/
 ```
 
+`extract` reproduces the structure of its input, so applied to the pseudonymized files it writes the NIfTI images to the same folders.
 The input and output folders must not be inside each other. 
 A missing output folder is created; the default is `INPUT_pseudonymized` (`pseudonymize`) or `INPUT_extracted` (`extract`), next to the input.
 
@@ -140,7 +142,6 @@ An existing table is updated: re-running replaces the rows of the same series, a
 | `Modality`, `SeriesNumber`, `SeriesDescription`, `BurnedInAnnotation` | From the original data |
 | `Input folder`, `Output folder` | Relative input folder(s) and pseudonymized output folder |
 | `Number of files` | Number of DICOM files of the series |
-| `NIfTI`, `Number of NIfTI files`, `Time points`, `Time keyword` | `extract` only: 2D/3D/4D, files written, 4D time points and the field used to find them |
 
 ## Pseudonymization: `pseudonymize`
 
@@ -154,11 +155,13 @@ If the same instance (SOPInstanceUID) appears twice in the input, it is written 
 ## Extraction: `extract`
 
 ```bash
-extract INPUT [-o OUTPUT] [-p PROFILE] [-i IDENTIFIER] [--linkage {patient,study}] -l LINK_TABLE [-k KEY_FILE] [-t TIMESTAMP]
+extract INPUT [-o OUTPUT] [-p PROFILE] [-t TIMESTAMP]
 ```
 
-Groups the input files by series (a folder may contain several series) and writes each series to the same pseudonymized folder as `pseudonymize` would. 
-It reads the original DICOM files, so all information is available for the conversion, and only pseudonymized values and the profile's metadata are written:
+Converts each DICOM series to NIfTI, reproducing the folder structure of the input: the files of `INPUT/<folder>/` are written to `OUTPUT/<folder>/`, without renaming folders. 
+If a folder contains several series, each series gets a subfolder `<SeriesNumber>_<Modality>` (with the SeriesInstanceUID appended if that name isn't unique); a pseudonymized folder always holds a single series. 
+`extract` doesn't pseudonymize: it is meant to be applied to the output of `pseudonymize`, and needs no key or linking table. 
+Applied to raw DICOM files, the output keeps their folder names and the profile's fields as they are.
 
 | Series | Files written |
 |---|---|
@@ -167,9 +170,11 @@ It reads the original DICOM files, so all information is available for the conve
 | 2D image(s) that don't form a volume (CR, DX, MG, localizers) | `image.nii.gz`, or `image_0.nii.gz`, `image_1.nii.gz`, … for several images (InstanceNumber order). Same pixel scaling, orientation and header as dicom2nifti; projection images use `PixelSpacing` (or `ImagerPixelSpacing`) as voxel size |
 | All series | `metadata.json`: the profile's fields (see [Profiles](#profiles)) |
 
-`OUTPUT/metadata.xlsx` gives an overview with one row per series: pseudonym, output folder, modality, time points and the profile's fields. 
-It contains no original identifiers. 
-Series that dicom2nifti can't convert (e.g. inconsistent slice spacing, multi-frame 2D) are listed at the end of the run:
+`OUTPUT/metadata.xlsx` gives an overview with one row per series: folder, modality, series number and description, number of files, NIfTI type (2D/3D/4D), number of NIfTI files, time points and the profile's fields. 
+Series that dicom2nifti can't convert (e.g. inconsistent slice spacing, multi-frame 2D) are listed at the end of the run.
+
+The profile selects the metadata written to `metadata.json`; only fields present in the input can be written. 
+On pseudonymized data, these are the fields kept by the profile used for the pseudonymization.
 
 **4D time points.** With profile 3, the time points of a series are detected automatically. 
 The first field that splits the series into more than one time point, each covering the same slice positions, is used:
@@ -179,6 +184,7 @@ The first field that splits the series into more than one time point, each cover
 3. `ContentTime`, `AcquisitionTime`, `TimeStamp` (GE private `0019,1024`)
 
 Series without a temporal dimension are written as 3D. `-t KEYWORD` forces one of these fields; series where it doesn't work are reported.
+For 4D data, pseudonymize with profile 3, so that the temporal fields are kept in the pseudonymized files.
 
 ## Arguments
 
@@ -187,10 +193,10 @@ Series without a temporal dimension are written as 3D. `-t KEYWORD` forces one o
 | `INPUT` | ✓ | ✓ | Folder (searched recursively) or single DICOM file | required |
 | `-o, --output` | ✓ | ✓ | Output folder, not inside the input (and vice versa) | `INPUT_pseudonymized` / `INPUT_extracted` |
 | `-p, --profile` | ✓ | ✓ | `0`–`4`, see [Profiles](#profiles) | `1` |
-| `-i, --identifier` | ✓ | ✓ | `PatientID`, `StudyID`, `AccessionNumber`, `AgfaID` | `PatientID` |
-| `--linkage` | ✓ | ✓ | `patient`, `study` | `patient` |
-| `-l, --link-table` | ✓ | ✓ | `.xlsx` or `.csv` file, not inside the output | required |
-| `-k, --key-file` | ✓ | ✓ | Key file, created if missing, not inside the output | environment variable `DICOM_PSEUDO_KEY` |
+| `-i, --identifier` | ✓ | | `PatientID`, `StudyID`, `AccessionNumber`, `AgfaID` | `PatientID` |
+| `--linkage` | ✓ | | `patient`, `study` | `patient` |
+| `-l, --link-table` | ✓ | | `.xlsx` or `.csv` file, not inside the output | required |
+| `-k, --key-file` | ✓ | | Key file, created if missing, not inside the output | environment variable `DICOM_PSEUDO_KEY` |
 | `-t, --timestamp` | | ✓ | `TemporalPositionIdentifier`, `NumberOfTemporalPositions`, `ContentTime`, `AcquisitionTime`, `TimeStamp` | automatic detection (profile 3) |
 
 **Identifiers.** The value is read from the first of these tags that holds a non-empty value:
@@ -274,14 +280,11 @@ pseudonymization(
 )
 
 extraction(
-    input_root='/data/study',
-    output_root='/release/nifti',
-    profile=3,                                # profile 3: 4D reconstruction
-    identifier='PatientID',
+    input_root='/release/dicom',              # pseudonymized DICOM files (folder or single file)
+    output_root='/release/nifti',             # same folder structure as the input
+    profile=1,                                # metadata fields; profile 3: 4D reconstruction
     time_stamp=None,                          # None: automatic, or e.g. 'NumberOfTemporalPositions'
-    key_file='/secrets/project.key',
-    link_table='/secrets/linking_table_nifti.xlsx',
-    linkage='patient',
+    progress_bar=True,
 )
 ```
 
@@ -294,6 +297,7 @@ Lower-level building blocks, e.g. for your own pipeline:
 | `dicom_pseudo.core.identity` | `identify(dataset, identifier, key, linkage)` returns a `SeriesIdentity` (original/pseudonymized IDs, UIDs, output folder) |
 | `dicom_pseudo.core.files` | `find_dicom_files(folder)`, `group_by_series(files)`, `save_dicom(dataset, path)` |
 | `dicom_pseudo.pseudonymization.pipeline` | `pseudonymize_dicom(...)`: one file |
+| `dicom_pseudo.extraction.pipeline` | `group_by_folder_and_series(files, input_folder)`, `extract_series(files, output_folder, fields, four_d)` |
 | `dicom_pseudo.extraction.nifti` | `write_nifti(files, output_folder, four_d)`, `convert_2d(path, output_file)` |
 | `dicom_pseudo.redaction` | `redaction(input_root, output_root, fill='contrast', padding_width=25)` |
 | `dicom_pseudo.compare_nifti` | `compare_nifti_files(file1, file2, tolerance=1e-5)` |
@@ -305,9 +309,8 @@ The `examples/` folder contains scripts that can be run on your own data:
 
 | Script | Content |
 |---|---|
-| `01_command_line.sh DICOM_FOLDER WORK_FOLDER` | Pseudonymized DICOM files, NIfTI images (3D/2D) and 4D NIfTI images from the command line |
-| `02_python_api.py DICOM_FOLDER WORK_FOLDER` | The same with the Python API, then a summary of the linking table and the NIfTI overview |
-| `03_add_data_later.py BATCH... WORK_FOLDER` | Pseudonymization in several batches with the same key and linking table: the same patient keeps the same pseudonym |
+| `01_command_line.sh DICOM_FOLDER WORK_FOLDER` | Pseudonymized DICOM files and NIfTI images extracted from them (2D/3D with profile 1, 4D with profile 3), from the command line |
+| `02_python_api.py DICOM_FOLDER WORK_FOLDER` | Pseudonymization and extraction with the Python API, then a summary of the linking table and the NIfTI overview |
 
 Each script writes `WORK_FOLDER/secrets/` (key, linking tables: keep, don't share) and `WORK_FOLDER/release/` (data to share).
 
@@ -337,5 +340,6 @@ For example, convert a series from the original and from the pseudonymized DICOM
 
 ## Limitations
 
-- **Private tags** are removed. Vendor-specific information they hold is therefore not available in the pseudonymized DICOM files (e.g. Siemens mosaic images can't be unpacked from them); 
+- **Private tags** are removed. Vendor-specific information they hold is therefore not available in the pseudonymized DICOM files (e.g. Siemens mosaic images can't be unpacked from them: `extract` writes them as 2D images, or reports them for 4D); 
+- **`extract` on raw data** doesn't pseudonymize: folder names and the profile's fields are copied as they are. 
 - **NIfTI conversion** depends on dicom2nifti for volumes: series it rejects (inconsistent slice spacing, multi-frame 2D, ...) are reported and not written.

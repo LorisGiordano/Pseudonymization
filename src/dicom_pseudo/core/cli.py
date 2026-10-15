@@ -34,10 +34,17 @@ def io_parser(description: str, output_description: str, output_suffix: str) -> 
     parser.set_defaults(output_suffix=output_suffix)
     return parser
 
+def add_profile_argument(parser: argparse.ArgumentParser) -> None:
+    """
+    Add the profile argument to an argument parser.
+    """
+
+    parser.add_argument('--profile', '-p', type=int, default=1, help=f'Selected profile ({profile_descriptions()}).')
+
 def base_parser(description: str, output_description: str, output_suffix: str) -> argparse.ArgumentParser:
     """
-    Create an argument parser with the arguments shared by the pseudonymizing commands: input and output (see
-    io_parser), profile, identifier, linkage, linking table and key file.
+    Create an argument parser with the arguments of the pseudonymization: input and output (see io_parser), profile,
+    identifier, linkage, linking table and key file.
 
     Inputs:
         - description: str = description of the command
@@ -49,7 +56,7 @@ def base_parser(description: str, output_description: str, output_suffix: str) -
     """
 
     parser = io_parser(description, output_description, output_suffix)
-    parser.add_argument('--profile', '-p', type=int, default=1, help=f'Selected profile ({profile_descriptions()}).')
+    add_profile_argument(parser)
     parser.add_argument('--identifier', '-i', type=str, default='PatientID', choices=list(IDENTIFIERS), help='Identifier to be pseudonymized and used for the linking table (default = PatientID).')
     parser.add_argument('--linkage', type=str, default='patient', choices=list(LINKAGES), help="Linkage level of the pseudonyms: 'patient' = studies of the same patient share the pseudonym (default), 'study' = one pseudonym per study, studies of the same patient cannot be linked without the key/linking table.")
     parser.add_argument('--link-table', '-l', type=str, required=True, help='Path to the linking table (.xlsx or .csv) between original and pseudo identifiers, one row per DICOM series. Must be outside the output folder; existing tables are updated.')

@@ -5,7 +5,7 @@ Command line interface of the extraction.
 """ IMPORTS """
 
 # Core modules
-from ..core.cli import base_parser, input_output
+from ..core.cli import io_parser, add_profile_argument, input_output
 
 # Extraction modules
 from .timepoints import TIME_STAMP_FIELDS
@@ -19,14 +19,16 @@ def main() -> None:
     CLI entry point. Parse arguments then run extraction workflow.
     """
 
-    parser = base_parser('Extract pseudonymized NifTi images and metadata from DICOM files.', 'pseudonymized NifTi files', '_extracted')
+    parser = io_parser('Extract NifTi images and metadata from DICOM files (meant for pseudonymized DICOM files), reproducing the structure of the input folder.',
+                       'NifTi files', '_extracted')
+    add_profile_argument(parser)
     parser.add_argument('--timestamp', '-t', type=str, default=None, choices=list(TIME_STAMP_FIELDS), help='DICOM keyword to be used for 4D data reconstruction with profile 3 (default = automatic detection).')
     args = parser.parse_args()
     input_root, output_root = input_output(args)
-    extraction(input_root, output_root, args.profile, args.identifier, args.timestamp, key_file=args.key_file, link_table=args.link_table, linkage=args.linkage)
+    extraction(input_root, output_root, args.profile, args.timestamp)
 
 
-# extract INPUT_ROOT -o OUTPUT_ROOT -p PROFILE -i IDENTIFIER -t TIMESTAMP --linkage LINKAGE -l LINK_TABLE -k KEY_FILE
+# extract INPUT_ROOT -o OUTPUT_ROOT -p PROFILE -t TIMESTAMP
 
 if __name__ == '__main__':
 

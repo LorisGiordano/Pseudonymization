@@ -16,6 +16,7 @@ import pydicom
 
 # Core modules
 from .identity import SeriesIdentity
+from .tables import read_table, write_table
 
 
 """ DEFINITIONS """
@@ -84,18 +85,13 @@ def save_link_table(link_table: str, series_records: dict, identifier: str) -> N
     if not series_records:
         return
 
-    is_csv = link_table.lower().endswith('.csv')
     df = pd.DataFrame(list(series_records.values())).astype(str)
 
     # merge with existing linking table, newer rows replace older rows of the same series
     if os.path.exists(link_table):
-        existing = pd.read_csv(link_table, dtype=str) if is_csv else pd.read_excel(link_table, dtype=str)
+        existing = read_table(link_table, dtype=str)
         df = pd.concat([existing, df], ignore_index=True)
         subset = [column for column in (f'Original {identifier}', 'Original SeriesInstanceUID', 'Input folder', 'Output folder') if column in df.columns]
         df = df.drop_duplicates(subset=subset, keep='last')
 
-    os.makedirs(os.path.dirname(os.path.abspath(link_table)), exist_ok=True)
-    if is_csv:
-        df.to_csv(link_table, index=False)
-    else:
-        df.to_excel(link_table, index=False)
+    write_table(df, link_table)

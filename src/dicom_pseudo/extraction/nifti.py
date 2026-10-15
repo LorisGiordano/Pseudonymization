@@ -125,7 +125,7 @@ def write_nifti(files: list, output_directory: str, four_d: bool = False, time_s
         - time_stamp_keyword: str = DICOM keyword to be used for 4D data reconstruction (default = None => automatic)
 
     Outputs:
-        - information: dict = information on the written NifTi (stored in the linking table)
+        - information: dict = information on the written NifTi (stored in the overview table metadata.xlsx)
     """
 
     paths = [path for path, _ in files]

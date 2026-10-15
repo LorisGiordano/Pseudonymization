@@ -29,9 +29,10 @@ KEY_ENV_VARIABLE = 'DICOM_PSEUDO_KEY'
 #   - study: one pseudonym per study, studies of the same patient cannot be linked without the key
 LINKAGES = ('patient', 'study')
 
-# Version of this tool, recorded in the DeidentificationMethod of the pseudonymized files
+# Name and version of this tool, recorded in the DeidentificationMethod of the pseudonymized files
+TOOL_NAME = 'dicom_pseudo'
 try:
-    TOOL_VERSION = version('dicom_pseudo')
+    TOOL_VERSION = version(TOOL_NAME)
 except PackageNotFoundError:
     TOOL_VERSION = 'unknown'
 

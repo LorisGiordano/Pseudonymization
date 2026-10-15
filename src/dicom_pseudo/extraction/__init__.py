@@ -1,5 +1,6 @@
 """
-Extraction of pseudonymized NifTi images and metadata from DICOM datasets.
+Extraction of NifTi images and metadata from DICOM datasets, reproducing the structure of the input folder. Meant to be
+applied to pseudonymized DICOM files (see dicom_pseudo.pseudonymization): the extraction itself does not pseudonymize.
 
 Modules:
     - timepoints: detection of the time points of a series (4D data)
@@ -8,7 +9,7 @@ Modules:
     - pipeline: extraction of DICOM series
     - cli: command line interface
 
-Shared modules (settings, pseudonyms, identity, files, paths, linking table, report) are in dicom_pseudo.core.
+Shared modules (settings, files, paths, report) are in dicom_pseudo.core.
 """
 
 from .pipeline import extraction
