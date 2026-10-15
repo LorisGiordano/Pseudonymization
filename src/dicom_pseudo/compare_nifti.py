@@ -48,7 +48,8 @@ def _compare_headers(image1: nib.nifti1.Nifti1Image, image2: nib.nifti1.Nifti1Im
     for key in header1.keys():
         value1 = header1[key]
         value2 = header2[key]
-        if not np.array_equal(value1, value2):
+        # NaN values (e.g. unset scl_slope/scl_inter) are equal to each other
+        if not np.array_equal(value1, value2, equal_nan=np.asarray(value1).dtype.kind == 'f'):
             header_differences.append((key, value1, value2))
 
     # print differences in the headers if any
@@ -111,8 +112,8 @@ def compare_nifti_files(file1: str, file2: str, tolerance: float = 1e-5) -> None
 def main():
     # Parser
     parser = argparse.ArgumentParser(description="Compare two NIfTI files (image data and metadata).")
-    parser.add_argument("file_path1", type=str, help="Absolute path to the original NIfTI file.")
-    parser.add_argument("file_path2", type=str, help="Absolute path to the pseudonnymized NIfTI file.")
+    parser.add_argument("file_path1", type=str, help="Path to the first NIfTI file (e.g. converted from the original DICOM files).")
+    parser.add_argument("file_path2", type=str, help="Path to the second NIfTI file (e.g. converted from the pseudonymized DICOM files).")
     parser.add_argument("--tolerance", "-t", type=float, default=1e-5, help="Tolerance for numerical comparison of image data.")
     args = parser.parse_args()
 

@@ -1,128 +1,344 @@
-# Pseudonymization
+# dicom_pseudo
 
-Utilities for pseudonymizing DICOM datasets
+Pseudonymization of DICOM datasets for research. The package provides two pipelines, which you can use from the
+command line or as a Python API:
+
+- **Pseudonymization** (`pseudonymize`): writes pseudonymized DICOM files. 
+  It keeps the image and the fields of the selected profile, replaces the patient identifier and all UIDs with keyed pseudonyms, and removes or empties everything else.
+- **Extraction** (`extract`): converts each DICOM series to NIfTI images (2D, 3D or 4D), together with the profile's
+  metadata as JSON, reproducing the folder structure of its input. 
+  It doesn't pseudonymize: run it on the pseudonymized DICOM files.
+
+Pseudonymization writes a **linking table** between original and pseudonymized identifiers, which must be kept separately from the data. 
+Two helper commands complete the toolkit: `redact` removes text burned into the pixel data, and `compare` compares two NIfTI files.
+
+Recommended workflow: `pseudonymize` (raw DICOM → pseudonymized DICOM) → optionally `redact` → `extract` (pseudonymized DICOM → NIfTI). 
+The extraction then only sees pseudonymized data, and needs no access to the raw data, the key or the linking table.
+
+## Contents
+
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Concepts](#concepts)
+- [Pseudonymization: `pseudonymize`](#pseudonymization-pseudonymize)
+- [Extraction: `extract`](#extraction-extract)
+- [Arguments](#arguments)
+- [Profiles](#profiles)
+- [Python API](#python-api)
+- [Example scripts](#example-scripts)
+- [Other commands](#other-commands)
+- [Limitations and good practice](#limitations-and-good-practice)
 
 ## Install
 
-### Python venv
-
-``` bash
-python -m venv pseudo
-source pseudo/bin/activate
-pip install --upgrade pip
-pip install -e .
-```
-
-### Conda
-
 ```bash
-conda create -n pseudo python==3.11
+conda create -n pseudo python=3.12
 conda activate pseudo
 pip install --upgrade pip
 pip install .
 ```
 
-### Optional
+Requires Python 3.10 or newer.
 
 ```bash
-pip install presidio_image_redactor==0.0.53
+python -m venv pseudo
+source pseudo/bin/activate
+pip install --upgrade pip
+pip install .
+```
+
+Redacting burned-in text is optional, because Microsoft Presidio is a large dependency:
+
+```bash
+pip install '.[presidio]'
 python -m spacy download en_core_web_lg
+brew install tesseract   # Tesseract OCR engine; on Linux: apt install tesseract-ocr
 ```
 
-- dependencies:
-    - azure-ai-formrecognizer
-    - matplotlib
-    - opencv-python
-    - pillow
-    - presidio-analyzer
-    - pypng
-    - pytesseract
-    - python-gdcm
-- Presidio image redactor uses the presidio-analyzer which requires a spaCy language model
+## Quick start
 
+Pseudonymized DICOM files
+```bash
+pseudonymize /data/study -o /release/dicom -k /secrets/project.key -l /secrets/linking_table.xlsx
+```
 
-## Pseudonyminzation
+NIfTI images and metadata, from the pseudonymized DICOM files (same folder structure)
+```bash
+extract /release/dicom -o /release/nifti
+```
+
+The key file is created at the first run. Keep it, and the linking table, in a protected location outside the data you share. 
+The same key gives the same pseudonyms in later runs.
+
+## Concepts
+
+### Secret key and pseudonyms
+
+Pseudonyms are keyed hashes (HMAC-SHA256) of the original identifier. 
+Without the key, they can't be recomputed, and low-entropy identifiers such as numeric patient IDs can't be recovered by trying every possible value.
+
+`--key-file PATH` reads the key from a file, or creates a new random key file (readable only by its owner) if it
+  doesn't exist yet. 
+  Alternatively, set the environment variable `DICOM_PSEUDO_KEY`.
+- **The key defines the scope of linkage.** Reuse the same key for all exports of a project, so a patient keeps the same pseudonym. 
+  Use a new key for each separate project or data release, so the releases can't be joined with each other.
+- The key file and the linking table are refused if they are inside the output folder.
+
+### Linkage: patient or study level
+
+`--linkage patient` (default) gives one pseudonym per patient (per identifier value): all studies of a patient share it, which allows longitudinal analyses.
+
+`--linkage study` gives one pseudonym per study, computed from the identifier and the original StudyInstanceUID. 
+All UIDs are also mapped per study, so a UID shared between two studies (e.g. a frame of reference) is replaced differently in each. 
+- Studies of the same patient then can't be linked in the released data. 
+- The linking table still lists the patient-level pseudonym of each study, so the key holder can re-link them.
+
+### DICOM information
+
+| Element | Result |
+|---|---|
+| Identifier (`--identifier`) | Pseudonymized; the pseudonym is written to PatientID and PatientName |
+| UIDs (study, series, ...) | Replaced by keyed UIDs. Standard UIDs (SOP class, transfer syntax, ...) are kept |
+| Fields kept in all profiles | Kept unchanged ([list](#fields-kept-in-all-profiles)) |
+| Fields in selected profile | Kept unchanged ([profiles](#profiles)) |
+| File meta information | Reduced to the elements a valid file needs |
+| Pixel data | Unchanged (to redact burned-in text, see [`redact`](#redact-burned-in-text)) |
+| All other fields | Emptied (zero-length value, so the file structure stays valid); sequences keep only their UIDs |
+| De-identification flags | `PatientIdentityRemoved = YES`; `DeidentificationMethod` records the tool version, profile, identifier and linkage |
+### Input files
+
+The input can be a folder, searched recursively, or a single DICOM file. 
+DICOMDIR index files and non-DICOM files (README, reports, …) are ignored and never copied. 
+Damaged files, and files without the chosen identifier, are skipped: the first ones are listed at the end of the run, and all of them in `<linking table>_errors.csv`, next to the linking table (it contains original paths: keep it with the linking table).
+
+### Output structure
+
+Pseudonymized output folders and file names are rebuilt from pseudonymized values only:
+
+```
+OUTPUT/<Pseudo_Identifier[:32]>/<Pseudo_StudyInstanceUID>/<Pseudo_SeriesInstanceUID>/
+```
+
+`extract` reproduces the structure of its input, so applied to the pseudonymized files it writes the NIfTI images to the same folders.
+
+### Linking table
+
+`--link-table PATH` (`.xlsx` or `.csv`, required) has one row per DICOM series (and input/output folder). 
+It contains the original identifiers, so treat it like the key. 
+An existing table is updated: re-running replaces the rows of the same series, and new series are added.
+
+| Column | Content |
+|---|---|
+| `Original <identifier>` | Original identifier value |
+| `Pseudonym <identifier>` | Pseudonym written in the data (patient or study level) |
+| `Patient pseudonym <identifier>` | Patient-level pseudonym (allows re-linking study-level data) |
+| `Linkage` | `patient` or `study` |
+| `Original / Pseudonymized StudyInstanceUID`, `… SeriesInstanceUID` | Original and pseudonymized UIDs |
+| `Modality`, `SeriesNumber`, `SeriesDescription`, `BurnedInAnnotation` | From the original data |
+| `Input folder`, `Output folder` | Relative input folder(s) and pseudonymized output folder |
+| `Number of files` | Number of DICOM files of the series |
+
+## Pseudonymization: `pseudonymize`
 
 ```bash
-pseudonymize INPUT_ROOT -o OUTPUT_ROOT -p PROFILE -i IDENTIFIER
+pseudonymize INPUT [-o OUTPUT] [-p PROFILE] [-i IDENTIFIER] [--linkage {patient,study}] -l LINK_TABLE [-k KEY_FILE] [-n PROCESSES]
 ```
 
-- INPUT_ROOT = Input root
-- [OUTPUT_ROOT] = Output root
-    - *default = INPUT_ROOT_pseudonymized*
-- [PROFILE] = Pseudonymization profile
-    - profile 0: user-defined -> profile.json
-    - profile 1: pseudonymization (age, sex, height, weight)
-    - profile 2: pseudonymization (age, sex, height, weight) + study time
-    - profile 3: anonymization for 4D data
-    - *default = 1*
-- [IDENTIFIER] = Pseodnymization identifier
-    - PatientID
-    - StudyID
-    - AgfaID (AccessionNumber / 7fdd,1013)
-    - *default = AgfaID*
+Writes one pseudonymized DICOM file per input file: `OUTPUT/<pseudonym>/<study UID>/<series UID>/<SOPInstanceUID>.dcm`. 
+If the same instance (SOPInstanceUID) appears twice in the input, it is written once and the duplicate is reported.
+**Parallel processing.** `-n PROCESSES` with more than 1 process pseudonymizes the input folders in parallel, one task per folder
 
-### Profile
+## Extraction: `extract`
 
 ```bash
-modify_profile
+extract INPUT [-o OUTPUT] [-p PROFILE] [-t TIMESTAMP]
 ```
 
-Opens an editor in order to modify the custom profile for pseudonymization.
+Converts each DICOM series to NIfTI, reproducing the folder structure of the input: the files of `INPUT/<folder>/` are written to `OUTPUT/<folder>/`, without renaming folders. 
+If a folder contains several series, each series gets a subfolder `<SeriesNumber>_<Modality>` (with the SeriesInstanceUID appended if that name isn't unique); a pseudonymized folder always holds a single series. 
+`extract` doesn't pseudonymize: it is meant to be applied to the output of `pseudonymize`, and needs no key or linking table. 
+Applied to raw DICOM files, the output keeps their folder names and the profile's fields as they are.
 
-Reference to the DICOM library of tags: https://www.dicomlibrary.com/dicom/dicom-tags/
+| Series | Files written |
+|---|---|
+| 3D volume | `image.nii.gz` |
+| 4D, with profile 3 | `0.nii.gz`, `1.nii.gz`, … `t.nii.gz` + `timestamps.json` |
+| 2D image | `image.nii.gz`, or `image_0.nii.gz`, `image_1.nii.gz`, …, `image_n.nii.gz` for 2D stacks |
+| All series | `metadata.json`: the profile's fields (see [Profiles](#profiles)) |
 
-### Field retention
+`OUTPUT/metadata.xlsx` gives an overview with one row per series: folder, modality, series number and description, number of files, NIfTI type (2D/3D/4D), number of NIfTI files, time points and the profile's fields. 
+Series that dicom2nifti can't convert (e.g. inconsistent slice spacing, multi-frame 2D) are listed at the end of the run.
 
+The profile selects the metadata written to `metadata.json`; only fields present in the input can be written. 
+On pseudonymized data, these are the fields kept by the profile used for the pseudonymization.
 
+**4D time points.** With profile 3, the time points of a series are detected automatically. 
+The first field that splits the series into more than one time point, each covering the same slice positions, is used:
 
+1. `TemporalPositionIdentifier`
+2. `NumberOfTemporalPositions`: with the files sorted by InstanceNumber, the k-th image at each slice position belongs to time point k
+3. `ContentTime`, `AcquisitionTime`, `TimeStamp` (GE private `0019,1024`)
 
-## Burnt-in text deidentification
+Series without a temporal dimension are written as 3D. 
+
+`-t KEYWORD` forces one of these fields; series where it doesn't work are reported.
+
+## Arguments
+
+| Argument | `pseudonymize` | `extract` | Values | Default |
+|---|---|---|---|---|
+| `INPUT` | ✓ | ✓ | Folder (searched recursively) or single DICOM file | required |
+| `-o, --output` | ✓ | ✓ | Output folder, not inside the input (and vice versa) | `INPUT_pseudonymized` / `INPUT_extracted` |
+| `-p, --profile` | ✓ | ✓ | `0`–`4`, see [Profiles](#profiles) | `1` |
+| `-i, --identifier` | ✓ | | `PatientID`, `StudyID`, `AccessionNumber`, `AgfaID` | `PatientID` |
+| `--linkage` | ✓ | | `patient`, `study` | `patient` |
+| `-l, --link-table` | ✓ | | `.xlsx` or `.csv` file, not inside the output | required |
+| `-k, --key-file` | ✓ | | Key file, created if missing, not inside the output | environment variable `DICOM_PSEUDO_KEY` |
+| `-n, --processes` | ✓ | | `0` or `1` = one process, more = folders processed in parallel | `1` |
+| `-t, --timestamp` | | ✓ | `TemporalPositionIdentifier`, `NumberOfTemporalPositions`, `ContentTime`, `AcquisitionTime`, `TimeStamp` | automatic detection (profile 3) |
+
+**Identifiers.** The value is read from the first of these tags that holds a non-empty value:
+
+| Identifier | DICOM tags | Note |
+|---|---|---|
+| `PatientID` | PatientID (0010,0020) | Recommended: one pseudonym per patient |
+| `StudyID` | StudyID (0020,0010) | one pseudonym per study |
+| `AccessionNumber` / `AgfaID` | AccessionNumber (0008,0050), then private tag (7fdd,1013) | one pseudonym per examination |
+
+Whatever the identifier, the pseudonym is written to PatientID and PatientName. 
+The identifiers are configured in `src/dicom_pseudo/core/config/identifiers.json`.
+
+## Profiles
+
+A profile chooses which fields are kept **on top of** the fields kept in all profiles. 
+The profiles are defined in `src/dicom_pseudo/core/config/profiles.json`; tags can be given as hex strings (`"0x00101010"`) or keywords (`"PatientAge"`), optionally grouped by category.
+
+| Profile | Use | Fields kept on top of the common fields |
+|---|---|---|
+| `0` | User-defined | The fields of `profile.json` |
+| `1` (default) | Demographics | PatientAge, PatientSex, PatientWeight, PatientSize, PatientSizeCodeSequence, PatientBodyMassIndex |
+| `2` | Demographics + date | Profile 1 + StudyDate, SeriesDate |
+| `3` | 4D data | ContentTime, AcquisitionTime, TimeStamp (GE private 0019,1024), TemporalPositionIdentifier, NumberOfTemporalPositions. No demographics |
+| `4` | Machine | Equipment, acquisition and reconstruction parameters, general to the machine and not to the installation or site (below). No demographics |
+
+**Profile 4 (machine).** Only standard DICOM tags; private tags are still removed.
+
+| Category | Fields |
+|---|---|
+| Equipment | ManufacturerModelName, SoftwareVersions, SpatialResolution |
+| MR | SequenceName, ImagedNucleus, NumberOfPhaseEncodingSteps, PercentSampling, PercentPhaseFieldOfView, ReceiveCoilName, TransmitCoilName, VariableFlipAngleFlag, AngioFlag, ParallelAcquisitionTechnique, ParallelReductionFactorInPlane, DiffusionBValue, DiffusionGradientOrientation |
+| CT | FilterType, GeneratorPower, FocalSpots, RevolutionTime, SingleCollimationWidth, TotalCollimationWidth, TableSpeed, TableFeedPerRotation, SpiralPitchFactor, ExposureModulationType, CTDIvol |
+| X-ray (CR/DX/MG) | DetectorType, DetectorConfiguration, AnodeTargetMaterial, FilterMaterial, Grid, DistanceSourceToPatient |
+| PET/NM | ReconstructionMethod, AttenuationCorrectionMethod, ScatterCorrectionMethod, RandomsCorrectionMethod, CountsSource, CollimatorType |
+
+### Fields kept in all profiles
+
+Configured in `src/dicom_pseudo/core/config/fields_to_keep.json` and `groups_to_keep.json`:
+
+| Category | Fields |
+|---|---|
+| File integrity | SpecificCharacterSet, ImageType, Manufacturer, SOPClassUID, SOPInstanceUID |
+| UIDs (pseudonymized) | StudyInstanceUID, SeriesInstanceUID, FrameOfReferenceUID |
+| Image | Modality, SeriesNumber, AcquisitionNumber, InstanceNumber, PatientPosition, ImagePositionPatient, ImageOrientationPatient, SliceLocation, SliceThickness |
+| MR acquisition | ScanningSequence, SequenceVariant, ScanOptions, MRAcquisitionType, RepetitionTime, EchoTime, InversionTime, NumberOfAverages, ImagingFrequency, EchoNumbers, MagneticFieldStrength, SpacingBetweenSlices, EchoTrainLength, PixelBandwidth, AcquisitionMatrix, InPlanePhaseEncodingDirection, FlipAngle |
+| CT / X-ray acquisition | KVP, DataCollectionDiameter, ReconstructionDiameter, DistanceSourceToDetector, GantryDetectorTilt, ExposureTime, XRayTubeCurrent, Exposure, ImagerPixelSpacing, ConvolutionKernel, ViewPosition |
+| PET | Units, DecayCorrection |
+| Image pixel description, pixel data | Groups 0028 and 7FE0 (rows, columns, spacing, rescale, window, pixel data) |
+
+### User-defined profile (profile 0)
 
 ```bash
-python presidio.py INPUT_ROOT -b BOX_TYPE
+modify_profile          # opens profile.json in the default editor
+modify_profile --path   # prints the path of profile.json
 ```
 
-- INPUT_ROOT = Input root
-- [BOX_TYPE]
-    - background
-    - contrast
-    - *defailt = background*
+`profile.json` is a dictionary of DICOM keywords and tags, e.g. `{"PatientAge": "0x00101010", "StudyDate": "StudyDate"}`.
+Tags can be looked up in the [DICOM standard](https://dicom.nema.org/medical/dicom/current/output/chtml/part06/chapter_6.html).
+A new predefined profile is added by adding an entry to `profiles.json`: `"5": {"description": "...", "fields": {...}}`.
+
+## Python API
+
+The pipelines can be called from Python with the same arguments as the commands. 
+Configuration errors (unknown profile or identifier, key or linking table inside the output, …) raise `SystemExit` with a message. 
+Files that can't be processed are reported and skipped; they don't raise.
+
+```python
+from dicom_pseudo.pseudonymization import pseudonymization
+from dicom_pseudo.extraction import extraction
+
+pseudonymization(
+    input_root='/data/study',                 # folder or single DICOM file
+    output_root='/release/dicom',             # outside the input
+    profile=1,                                # 0-4
+    identifier='PatientID',                   # PatientID, StudyID, AccessionNumber, AgfaID
+    key_file='/secrets/project.key',          # None: environment variable DICOM_PSEUDO_KEY
+    link_table='/secrets/linking_table.xlsx', # .xlsx or .csv, outside the output
+    linkage='patient',                        # 'patient' or 'study'
+    processes=1,                              # more than 1: folders processed in parallel
+    progress_bar=True,
+)
+
+extraction(
+    input_root='/release/dicom',              # pseudonymized DICOM files (folder or single file)
+    output_root='/release/nifti',             # same folder structure as the input
+    profile=1,                                # metadata fields; profile 3: 4D reconstruction
+    time_stamp=None,                          # None: automatic, or e.g. 'NumberOfTemporalPositions'
+    progress_bar=True,
+)
+```
+
+Lower-level building blocks, e.g. for your own pipeline:
+
+| Module | Main functions |
+|---|---|
+| `dicom_pseudo.core.settings` | `select_profile(profile)`: fields and groups to keep; `FIELDS_TO_KEEP`, `IDENTIFIERS`, `LINKAGES` |
+| `dicom_pseudo.core.pseudonym` | `load_key(key_file)`, `pseudonym(value, key)`, `pseudo_uid(uid, key)` |
+| `dicom_pseudo.core.identity` | `identify(dataset, identifier, key, linkage)` returns a `SeriesIdentity` (original/pseudonymized IDs, UIDs, output folder) |
+| `dicom_pseudo.core.files` | `find_dicom_files(folder)`, `group_by_series(files)`, `save_dicom(dataset, path)` |
+| `dicom_pseudo.pseudonymization.pipeline` | `pseudonymize_dicom(...)`: one file |
+| `dicom_pseudo.extraction.pipeline` | `group_by_folder_and_series(files, input_folder)`, `extract_series(files, output_folder, fields, four_d)` |
+| `dicom_pseudo.extraction.nifti` | `write_nifti(files, output_folder, four_d)`, `convert_2d(path, output_file)` |
+| `dicom_pseudo.redaction` | `redaction(input_root, output_root, fill='contrast', padding_width=25)` |
+| `dicom_pseudo.compare_nifti` | `compare_nifti_files(file1, file2, tolerance=1e-5)` |
 
 
-## Extraction
+## Example scripts
+
+The `examples/` folder contains scripts that can be run on your own data:
+
+| Script | Content |
+|---|---|
+| `01_command_line.sh DICOM_FOLDER WORK_FOLDER` | Pseudonymized DICOM files and NIfTI images extracted from them (2D/3D with profile 1, 4D with profile 3), from the command line |
+| `02_python_api.py DICOM_FOLDER WORK_FOLDER` | Pseudonymization and extraction with the Python API, then a summary of the linking table and the NIfTI overview |
+
+Each script writes `WORK_FOLDER/secrets/` (key, linking tables: keep, don't share) and `WORK_FOLDER/release/` (data to share).
+
+## Other commands
+
+### `redact`: burned-in text [NOT TESTED]
 
 ```bash
-exrtact INPUT_ROOT -o OUTPUT_ROOT -p PROFILE -i IDENTIFIER -t TIMESTAMP
+redact INPUT [-o OUTPUT] [-f {contrast,background}] [--padding PIXELS]
 ```
 
-- INPUT_ROOT = Input root
-- [OUTPUT_ROOT] = Output root
-    - *default = INPUT_ROOT_extracted*
-- [PROFILE] = Pseudonymization profile
-    - profile 0: user-defined -> profile.json
-    - profile 1: pseudonymization (age, sex, height, weight)
-    - profile 2: pseudonymization (age, sex, height, weight) + study time
-    - profile 3: anonymization for 4D data
-    - *default = 1*
-- [IDENTIFIER] = Pseudonymization identifier
-    - PatientID
-    - StudyID
-    - AgfaID (AccessionNumber / 7fdd,1013)
-    - *default = AgfaID*
-- [TIMESTAMP] = Timestamp keyword for 4D data
-    - TimeStamp (0019,1024)
-    - AcquisitionTime
-    - ContentTime
-    - *default = None => auto-detection*
- 
-## Check output
+Detects text in the pixel data with OCR (Microsoft Presidio and Tesseract) and covers it with boxes. 
+Run it on the **pseudonymized** DICOM files: files keep their relative paths, and only the pixel data changes. 
+`--fill` sets the box colour (`contrast`, the default, or `background`); 
+`--padding` sets the padding around the image for the text detection (default 25 pixels). 
+It needs the optional install described in [Install](#install). 
+The linking table column `BurnedInAnnotation` and the warning at the end of `pseudonymize` show the series flagged as containing burned-in annotations.
+
+### `compare`: NIfTI files
 
 ```bash
-compare FILE_PATH1 FILE_PATH2 -t TOLERANCE
+compare FILE1 FILE2 [-t TOLERANCE]
 ```
 
-- FILE_PATH1 = original DICOM file transformed to NifTi
-- FILE_PATH2 = pseudonymized DICOM file transformed to NifTi
-- [TOLERANCE] = numerical tolerance when comparing pixel/voxel values
-    - *default = 1e-5*
+Compares two NIfTI files, header fields and voxel values (within `TOLERANCE`, default `1e-5`). 
+For example, convert a series from the original and from the pseudonymized DICOM files and check that the images are identical.
+
+## Limitations
+
+- **Private tags** are removed. Vendor-specific information they hold is therefore not available in the pseudonymized DICOM files (e.g. Siemens mosaic images can't be unpacked from them: `extract` writes them as 2D images, or reports them for 4D); 
+- **`extract` on raw data** doesn't pseudonymize: folder names and the profile's fields are copied as they are. 
+- **NIfTI conversion** depends on dicom2nifti for volumes: series it rejects (inconsistent slice spacing, multi-frame 2D, ...) are reported and not written.

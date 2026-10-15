@@ -1,0 +1,15 @@
+[
+    "SOPClassUID",
+    "MediaStorageSOPClassUID",
+    "ReferencedSOPClassUID",
+    "ReferencedSOPClassUIDInFile",
+    "AffectedSOPClassUID",
+    "RequestedSOPClassUID",
+    "RelatedGeneralSOPClassUID",
+    "OriginalSpecializedSOPClassUID",
+    "TransferSyntaxUID",
+    "ReferencedTransferSyntaxUIDInFile",
+    "ImplementationClassUID",
+    "CodingSchemeUID",
+    "PrivateInformationCreatorUID"
+]

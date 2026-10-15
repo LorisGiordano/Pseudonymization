@@ -1,0 +1,90 @@
+{
+    "1": {
+        "description": "demographics: age, sex, weight, height",
+        "fields": {
+            "PatientAge": "0x00101010",
+            "PatientSex": "0x00100040",
+            "PatientWeight": "0x00101030",
+            "PatientSize": "0x00101020",
+            "PatientSizeCodeSequence": "0x00101021",
+            "PatientBodyMassIndex": "0x00101022"
+        }
+    },
+    "2": {
+        "description": "demographics + study and series date",
+        "fields": {
+            "PatientAge": "0x00101010",
+            "PatientSex": "0x00100040",
+            "PatientWeight": "0x00101030",
+            "PatientSize": "0x00101020",
+            "PatientSizeCodeSequence": "0x00101021",
+            "PatientBodyMassIndex": "0x00101022",
+            "StudyDate": "0x00080020",
+            "SeriesDate": "0x00080021"
+        }
+    },
+    "3": {
+        "description": "4D: time stamps and temporal positions",
+        "fields": {
+            "ContentTime": "0x00080033",
+            "AcquisitionTime": "0x00080032",
+            "TimeStamp": "0x00191024",
+            "TemporalPositionIdentifier": "0x00200100",
+            "NumberOfTemporalPositions": "0x00200105"
+        }
+    },
+    "4": {
+        "description": "machine: equipment, acquisition and reconstruction parameters (no installation or site data)",
+        "fields": {
+            "Equipment (model and software, no serial number, station or site)": {
+                "ManufacturerModelName": "0x00081090",
+                "SoftwareVersions": "0x00181020",
+                "SpatialResolution": "0x00181050"
+            },
+            "MR": {
+                "SequenceName": "0x00180024",
+                "ImagedNucleus": "0x00180085",
+                "NumberOfPhaseEncodingSteps": "0x00180089",
+                "PercentSampling": "0x00180093",
+                "PercentPhaseFieldOfView": "0x00180094",
+                "ReceiveCoilName": "0x00181250",
+                "TransmitCoilName": "0x00181251",
+                "VariableFlipAngleFlag": "0x00181315",
+                "AngioFlag": "0x00180025",
+                "ParallelAcquisitionTechnique": "0x00189078",
+                "ParallelReductionFactorInPlane": "0x00189069",
+                "DiffusionBValue": "0x00189087",
+                "DiffusionGradientOrientation": "0x00189089"
+            },
+            "CT": {
+                "FilterType": "0x00181160",
+                "GeneratorPower": "0x00181170",
+                "FocalSpots": "0x00181190",
+                "RevolutionTime": "0x00189305",
+                "SingleCollimationWidth": "0x00189306",
+                "TotalCollimationWidth": "0x00189307",
+                "TableSpeed": "0x00189309",
+                "TableFeedPerRotation": "0x00189310",
+                "SpiralPitchFactor": "0x00189311",
+                "ExposureModulationType": "0x00189323",
+                "CTDIvol": "0x00189345"
+            },
+            "X-ray (CR/DX/MG)": {
+                "DetectorType": "0x00187004",
+                "DetectorConfiguration": "0x00187005",
+                "AnodeTargetMaterial": "0x00181191",
+                "FilterMaterial": "0x00187050",
+                "Grid": "0x00181166",
+                "DistanceSourceToPatient": "0x00181111"
+            },
+            "PET/NM": {
+                "ReconstructionMethod": "0x00541103",
+                "AttenuationCorrectionMethod": "0x00541101",
+                "ScatterCorrectionMethod": "0x00541105",
+                "RandomsCorrectionMethod": "0x00541100",
+                "CountsSource": "0x00541002",
+                "CollimatorType": "0x00181181"
+            }
+        }
+    }
+}

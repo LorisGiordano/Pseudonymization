@@ -1,6 +1,9 @@
 import os
+import argparse
 import subprocess
 import platform
+
+from dicom_pseudo.core.settings import USER_PROFILE_FILEPATH
 
 def open_with_default_app(path):
 
@@ -26,7 +29,13 @@ def open_with_default_app(path):
             print(path)
 
 def main():
-    open_with_default_app(os.path.join(os.path.dirname(__file__), "profile.json"))
+    parser = argparse.ArgumentParser(description=f"Open the user-defined profile (profile 0) for editing: {USER_PROFILE_FILEPATH}")
+    parser.add_argument('--path', action='store_true', help='Only print the path of the profile file, without opening it.')
+    args = parser.parse_args()
+    if args.path:
+        print(USER_PROFILE_FILEPATH)
+    else:
+        open_with_default_app(USER_PROFILE_FILEPATH)
 
 if __name__ == "__main__":
     main()

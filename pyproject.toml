@@ -9,31 +9,41 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-dicom_pseudo = ["profile.json"]
+"dicom_pseudo.core" = ["config/*.json"]
 
 
 [project]
 name = "dicom_pseudo"
-version = "0.1.0"
+version = "0.2.0"
 authors = [
   { name="Loris Giordano", email="loris.giordano@vub.be" },
 ]
 description = "Utilities for pseudonymizing DICOM datasets."
 readme = "README.md"
-requires-python = ">=3.9,<=3.14"
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "pandas >= 1.5",
+  "pandas >= 2.1",
   "pydicom >= 2.4",
   "openpyxl >= 3.1",
   "tqdm >= 4.66",
+  "dicom2nifti >= 2.4",
+  "nibabel >= 5.0",
+  "numpy >= 1.24",
+]
+
+[project.optional-dependencies]
+# redaction of text burned into the pixel data (also requires: python -m spacy download en_core_web_lg, and Tesseract OCR)
+presidio = [
+  "presidio-image-redactor >= 0.0.53",
 ]
 
 [project.scripts]
 pseudonymize = "dicom_pseudo.pseudonymization:main"
 extract = "dicom_pseudo.extraction:main"
 compare = "dicom_pseudo.compare_nifti:main"
+redact = "dicom_pseudo.redaction:main"
 modify_profile = "dicom_pseudo.modify_profile:main"
