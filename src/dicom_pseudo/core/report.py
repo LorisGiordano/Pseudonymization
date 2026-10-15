@@ -4,7 +4,7 @@ Report of a run: warnings (burned-in annotations, skipped and failed inputs) and
 
 """ FUNCTIONS """
 
-def report(series_records: dict, skipped: list, failed: list, identifier: str, summary: str, done: str, output_root: str, link_table: str, maximum: int = 10) -> None:
+def report(series_records: dict, skipped: list, failed: list, identifier: str, summary: str, done: str, output_root: str, link_table: str = None, maximum: int = 10) -> None:
     """
     Print the report of a run.
 
@@ -16,7 +16,7 @@ def report(series_records: dict, skipped: list, failed: list, identifier: str, s
         - summary: str = summary line of the run
         - done: str = name of the step (e.g. 'Pseudonymization')
         - output_root: str = path to output folder
-        - link_table: str = path to linking table
+        - link_table: str = path to linking table (default = None => no linking table)
         - maximum: int = maximum number of examples printed per warning (default = 10)
     """
 
@@ -24,7 +24,7 @@ def report(series_records: dict, skipped: list, failed: list, identifier: str, s
     burned_in = [record['Output folder'] for record in series_records.values() if record.get('BurnedInAnnotation', '').upper() == 'YES']
     if burned_in:
         print(f"WARNING: {len(burned_in)} series flagged with BurnedInAnnotation=YES, pixel data may contain PHI "
-              "(check visually or redact with presidio.py), e.g.:")
+              "(check visually or redact with the redact command), e.g.:")
         for folder in burned_in[:maximum]:
             print(" -", folder)
 
@@ -41,4 +41,5 @@ def report(series_records: dict, skipped: list, failed: list, identifier: str, s
     print(summary)
     print(f"{done} done.")
     print(" =>", output_root)
-    print(" => linking table:", link_table)
+    if link_table is not None:
+        print(" => linking table:", link_table)

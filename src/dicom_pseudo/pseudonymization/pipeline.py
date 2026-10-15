@@ -23,7 +23,7 @@ from pydicom.tag import Tag
 from ..core.settings import IDENTIFIERS, LINKAGES, TOOL_VERSION, select_profile
 from ..core.pseudonym import load_key
 from ..core.identity import identify
-from ..core.files import find_dicom_files
+from ..core.files import find_dicom_files, save_dicom
 from ..core.paths import check_paths
 from ..core.linking_table import link_record, add_record, save_link_table
 from ..core.report import report
@@ -34,23 +34,6 @@ from .sanitization import remove_private_tags, sanitize_dataset, ensure_file_met
 
 
 """ FUNCTIONS """
-
-def _save_dicom(dicom_data: pydicom.dataset.FileDataset, output_path: str) -> None:
-    """
-    Save a DICOM file in standard DICOM file format (preamble, prefix and file meta information), partially
-    written files are removed.
-    """
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    try:
-        if int(pydicom.__version__.split('.')[0]) >= 3:
-            dicom_data.save_as(output_path, enforce_file_format=True)
-        else:
-            dicom_data.save_as(output_path, write_like_original=False)
-    except Exception:
-        if os.path.exists(output_path):
-            os.remove(output_path)
-        raise
 
 def pseudonymize_dicom(input_path: str, input_folder: str, output_root: str, identifier: str, key: bytes, deidentification_method: str, fields_to_keep: dict, groups_to_keep: set, linkage: str = 'patient', written_paths: set = None) -> dict:
     """
@@ -104,7 +87,7 @@ def pseudonymize_dicom(input_path: str, input_folder: str, output_root: str, ide
         written_paths.add(output_path)
 
     # save the pseudonymized DICOM file
-    _save_dicom(dicom_data, output_path)
+    save_dicom(dicom_data, output_path)
 
     return record
 

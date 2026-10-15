@@ -25,18 +25,14 @@ def default_output(input_root: str, suffix: str) -> str:
 
     return (os.path.splitext(input_root)[0] if os.path.isfile(input_root) else input_root) + suffix
 
-def check_paths(input_root: str, output_root: str, link_table: str, key_file: str = None) -> tuple[str, str]:
+def check_input_output(input_root: str, output_root: str) -> tuple[str, str]:
     """
-    Check the locations of input, output, linking table and key file:
-        - input and output must be separate folders (otherwise original files could be overwritten, or outputs
-          pseudonymized again in later runs)
-        - the key and the linking table must never be stored together with the pseudonymized data
+    Check the locations of input and output: input and output must be separate folders (otherwise original files
+    could be overwritten, or outputs processed again in later runs).
 
     Inputs:
         - input_root: str = path to input folder or single DICOM file
         - output_root: str = path to output folder
-        - link_table: str = path to linking table
-        - key_file: str = path to key file (default = None)
 
     Outputs:
         - input_folder: str = input folder (folder of the file for a single input file)
@@ -52,6 +48,27 @@ def check_paths(input_root: str, output_root: str, link_table: str, key_file: st
             raise SystemExit(f"The output folder '{output_root}' must differ from the folder of the input file.")
     elif is_inside(output_root, input_folder) or is_inside(input_folder, output_root):
         raise SystemExit(f"The output folder '{output_root}' and the input folder '{input_folder}' must not be located inside each other.")
+
+    return input_folder, single_file
+
+def check_paths(input_root: str, output_root: str, link_table: str, key_file: str = None) -> tuple[str, str]:
+    """
+    Check the locations of input, output, linking table and key file:
+        - input and output must be separate folders (see check_input_output)
+        - the key and the linking table must never be stored together with the pseudonymized data
+
+    Inputs:
+        - input_root: str = path to input folder or single DICOM file
+        - output_root: str = path to output folder
+        - link_table: str = path to linking table
+        - key_file: str = path to key file (default = None)
+
+    Outputs:
+        - input_folder: str = input folder (folder of the file for a single input file)
+        - single_file: str = file name of the single input file (None for an input folder)
+    """
+
+    input_folder, single_file = check_input_output(input_root, output_root)
 
     if link_table is None:
         raise SystemExit("No linking table given. Use --link-table PATH (outside the output folder).")

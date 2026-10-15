@@ -1,6 +1,6 @@
 {
     "1": {
-        "description": "pseudonymization (age, sex, weight, height)",
+        "description": "demographics: age, sex, weight, height",
         "fields": {
             "PatientAge": "0x00101010",
             "PatientSex": "0x00100040",
@@ -11,7 +11,7 @@
         }
     },
     "2": {
-        "description": "pseudonymization (age, sex, weight, height) + study date",
+        "description": "demographics + study and series date",
         "fields": {
             "PatientAge": "0x00101010",
             "PatientSex": "0x00100040",
@@ -24,7 +24,7 @@
         }
     },
     "3": {
-        "description": "anonymization 4D (time stamps)",
+        "description": "4D: time stamps and temporal positions",
         "fields": {
             "ContentTime": "0x00080033",
             "AcquisitionTime": "0x00080032",
@@ -34,7 +34,7 @@
         }
     },
     "4": {
-        "description": "machine (equipment, acquisition and reconstruction parameters; no installation or site data)",
+        "description": "machine: equipment, acquisition and reconstruction parameters (no installation or site data)",
         "fields": {
             "Equipment (model and software, no serial number, station or site)": {
                 "ManufacturerModelName": "0x00081090",

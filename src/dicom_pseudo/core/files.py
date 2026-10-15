@@ -1,5 +1,5 @@
 """
-Discovery of the DICOM files of an input (detected by content) and grouping by series.
+Discovery of the DICOM files of an input (detected by content), grouping by series, and saving of DICOM files.
 """
 
 """ IMPORTS """
@@ -91,3 +91,24 @@ def group_by_series(dicom_files: list[str]) -> dict:
     for files in series.values():
         files.sort(key=lambda item: int(item[1].get('InstanceNumber', 0) or 0))
     return series
+
+def save_dicom(dicom_data: pydicom.dataset.FileDataset, output_path: str) -> None:
+    """
+    Save a DICOM file in standard DICOM file format (preamble, prefix and file meta information), partially
+    written files are removed.
+
+    Inputs:
+        - dicom_data: pydicom.dataset.FileDataset = dicom file object
+        - output_path: str = path to output file (folders are created if needed)
+    """
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    try:
+        if int(pydicom.__version__.split('.')[0]) >= 3:
+            dicom_data.save_as(output_path, enforce_file_format=True)
+        else:
+            dicom_data.save_as(output_path, write_like_original=False)
+    except Exception:
+        if os.path.exists(output_path):
+            os.remove(output_path)
+        raise
