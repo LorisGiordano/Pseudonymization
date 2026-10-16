@@ -19,6 +19,7 @@ import pandas as pd
 
 # Openpyxl
 from openpyxl import Workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 
 
 """ DEFINITIONS """
@@ -28,6 +29,9 @@ FORMULA_CHARACTERS = ('=', '+', '-', '@')
 
 # Numbers (not escaped, e.g. negative values)
 NUMBER = re.compile(r'^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$')
+
+# Maximum number of characters of a cell in Excel
+MAXIMUM_CELL_LENGTH = 32767
 
 
 """ FUNCTIONS """
@@ -39,6 +43,20 @@ def _is_formula_like(value) -> bool:
 
     return isinstance(value, str) and value.startswith(FORMULA_CHARACTERS) and not NUMBER.match(value)
 
+def _cell_value(value):
+    """
+    Get a value that can be stored in an Excel cell: characters not allowed in .xlsx files (control characters) are
+    removed, and text longer than the maximum cell length is cut (marked with '...').
+    """
+
+    if not isinstance(value, str) and pd.isna(value):
+        return None
+    if isinstance(value, str):
+        value = ILLEGAL_CHARACTERS_RE.sub('', value)
+        if len(value) > MAXIMUM_CELL_LENGTH:
+            value = value[:MAXIMUM_CELL_LENGTH - 3] + '...'
+    return value
+
 def _write_xlsx(df: pd.DataFrame, path: str) -> None:
     """
     Write a table as .xlsx, with text always stored as text (never as a formula).
@@ -48,7 +66,7 @@ def _write_xlsx(df: pd.DataFrame, path: str) -> None:
     sheet = workbook.active
     sheet.append([str(column) for column in df.columns])
     for row in df.itertuples(index=False):
-        sheet.append([None if pd.isna(value) else value for value in row])
+        sheet.append([_cell_value(value) for value in row])
     for row in sheet.iter_rows(min_row=1):
         for cell in row:
             if _is_formula_like(cell.value):

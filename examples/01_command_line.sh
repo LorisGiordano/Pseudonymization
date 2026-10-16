@@ -30,8 +30,9 @@ extract "$RELEASE/dicom" \
     --output "$RELEASE/nifti" \
     --profile 1
 
-# 3. 4D data (e.g. fMRI, dynamic PET): pseudonymize with profile 3 to keep the temporal fields, then extract with
-#    profile 3, one NifTi per time point (time points detected automatically, or forced with --timestamp KEYWORD)
+# 3. 4D data (e.g. fMRI, dynamic PET): pseudonymize with profile 3 to keep the temporal fields (without them, extract
+#    reports 4D series as not converted), then extract: one NifTi per time point (time points detected automatically,
+#    or forced with --timestamp KEYWORD), metadata of profile 3
 pseudonymize "$DICOM_FOLDER" \
     --output "$RELEASE/dicom_4d" \
     --profile 3 \
