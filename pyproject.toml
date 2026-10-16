@@ -40,10 +40,22 @@ dependencies = [
 presidio = [
   "presidio-image-redactor >= 0.0.53",
 ]
+# tests (pytest)
+test = [
+  "pytest >= 8",
+]
 
 [project.scripts]
 pseudonymize = "dicom_pseudo.pseudonymization:main"
 extract = "dicom_pseudo.extraction:main"
 compare = "dicom_pseudo.compare_nifti:main"
 redact = "dicom_pseudo.redaction:main"
-modify_profile = "dicom_pseudo.modify_profile:main"
+modify-profile = "dicom_pseudo.modify_profile:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# short tracebacks: test arguments (e.g. DICOM datasets of real data) are not printed in failure reports
+addopts = "--tb=short"
+markers = [
+    "real_data: tests on the real datasets of the _data folder next to the repository (skipped if absent)",
+]

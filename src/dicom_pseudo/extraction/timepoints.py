@@ -40,7 +40,8 @@ def time_positions(files: list, time_stamp_keyword: str = None) -> tuple[str, li
     """
     Get the time position of each image of a series (for 4D data reconstruction).
 
-    Automatic detection (if no time stamp keyword given), the first keyword giving more than one time point, each
+    Only for 4D series (images with slice positions, several images at the same position). Automatic detection (if
+    no time stamp keyword given), the first keyword giving more than one time point, each
     time point covering the same spatial positions (one volume per time point), is used:
         - TemporalPositionIdentifier
         - NumberOfTemporalPositions (time point = order of the image at its spatial position)
@@ -58,6 +59,11 @@ def time_positions(files: list, time_stamp_keyword: str = None) -> tuple[str, li
     if time_stamp_keyword is not None and time_stamp_keyword not in TIME_STAMP_FIELDS:
         raise SystemExit(f"Keyword '{time_stamp_keyword}' cannot be used as a time stamp keyword. (Use one of: {', '.join(TIME_STAMP_FIELDS)})")
     keywords = [time_stamp_keyword] if time_stamp_keyword else list(TIME_STAMP_FIELDS)
+
+    # 4D series only: images with slice positions, several images at the same position
+    positions = [spatial_position(dicom_data) for _, dicom_data in files]
+    if not all(positions) or len(set(positions)) == len(positions):
+        return None, None
 
     for keyword in keywords:
         tag = TIME_STAMP_FIELDS[keyword]

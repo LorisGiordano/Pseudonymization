@@ -27,6 +27,7 @@ The extraction then only sees pseudonymized data, and needs no access to the raw
 - [Python API](#python-api)
 - [Example scripts](#example-scripts)
 - [Other commands](#other-commands)
+- [Tests](#tests)
 - [Limitations and good practice](#limitations-and-good-practice)
 
 ## Install
@@ -155,49 +156,43 @@ extract INPUT [-o OUTPUT] [-p PROFILE] [-t TIMESTAMP]
 ```
 
 Converts each DICOM series to NIfTI, reproducing the folder structure of the input: the files of `INPUT/<folder>/` are written to `OUTPUT/<folder>/`, without renaming folders. 
-If a folder contains several series, each series gets a subfolder `<SeriesNumber>_<Modality>` (with the SeriesInstanceUID appended if that name isn't unique); a pseudonymized folder always holds a single series. 
-`extract` doesn't pseudonymize: it is meant to be applied to the output of `pseudonymize`, and needs no key or linking table. 
+If a folder contains several series, each series gets a subfolder `<SeriesNumber>_<Modality>` (with the SeriesInstanceUID appended if that name isn't unique).
 Applied to raw DICOM files, the output keeps their folder names and the profile's fields as they are.
 
 | Series | Files written |
 |---|---|
 | 3D volume | `image.nii.gz` |
-| 4D, with profile 3 | `0.nii.gz`, `1.nii.gz`, … `t.nii.gz` + `timestamps.json` |
-| 2D image | `image.nii.gz`, or `image_0.nii.gz`, `image_1.nii.gz`, …, `image_n.nii.gz` for 2D stacks |
-| All series | `metadata.json`: the profile's fields (see [Profiles](#profiles)) |
+| 4D series with time points in the files (e.g. fMRI, perfusion, dynamic series) | `0.nii.gz`, `1.nii.gz`, … `t.nii.gz` (one volume per time point) + `timestamps.json` |
+| Diffusion series (b-values found by dicom2nifti) | `image.nii.gz` (4D), `image.bval` and `image.bvec` |
+| 2D images: no slice geometry (CR, DX, MG), or single slices and localisers rejected by dicom2nifti | `image.nii.gz`, or `image_0.nii.gz`, `image_1.nii.gz`, …, `image_n.nii.gz` for several images |
+| All series | `metadata.json`: the profile's fields (see [Profiles](#profiles)); binary fields (e.g. vendor private headers) as `<binary, N bytes>` |
 
-`OUTPUT/metadata.xlsx` gives an overview with one row per series: folder, modality, series number and description, number of files, NIfTI type (2D/3D/4D), number of NIfTI files, time points and the profile's fields. 
-Series that dicom2nifti can't convert (e.g. inconsistent slice spacing, multi-frame 2D) are listed at the end of the run.
-
-The profile selects the metadata written to `metadata.json`; only fields present in the input can be written. 
-On pseudonymized data, these are the fields kept by the profile used for the pseudonymization.
-
-**4D time points.** With profile 3, the time points of a series are detected automatically. 
-The first field that splits the series into more than one time point, each covering the same slice positions, is used:
+**4D time points.** A 4D series (several images at each slice position) is written as one NIfTI per time point. 
+The time points are read from the files: the first field that splits the series into more than one time point, each covering the same slice positions, is used:
 
 1. `TemporalPositionIdentifier`
 2. `NumberOfTemporalPositions`: with the files sorted by InstanceNumber, the k-th image at each slice position belongs to time point k
 3. `ContentTime`, `AcquisitionTime`, `TimeStamp` (GE private `0019,1024`)
 
-Series without a temporal dimension are written as 3D. 
-
-`-t KEYWORD` forces one of these fields; series where it doesn't work are reported.
+`-t KEYWORD` forces one of these fields for the 4D series; 4D series where it doesn't work are reported. 3D and 2D series aren't affected.
 
 ## Arguments
 
 | Argument | `pseudonymize` | `extract` | Values | Default |
 |---|---|---|---|---|
-| `INPUT` | ✓ | ✓ | Folder (searched recursively) or single DICOM file | required |
-| `-o, --output` | ✓ | ✓ | Output folder, not inside the input (and vice versa) | `INPUT_pseudonymized` / `INPUT_extracted` |
+| `INPUT` | ✓ | ✓ | Folder or single DICOM file | required |
+| `-o, --output` | ✓ | ✓ | Output folder | `INPUT_pseudonymized` / `INPUT_extracted` |
 | `-p, --profile` | ✓ | ✓ | `0`–`4`, see [Profiles](#profiles) | `1` |
-| `-i, --identifier` | ✓ | | `PatientID`, `StudyID`, `AccessionNumber`, `AgfaID` | `PatientID` |
+| `-i, --identifier` | ✓ | | Identifier DICOM keyword | `PatientID` |
 | `--linkage` | ✓ | | `patient`, `study` | `patient` |
-| `-l, --link-table` | ✓ | | `.xlsx` or `.csv` file, not inside the output | required |
-| `-k, --key-file` | ✓ | | Key file, created if missing, not inside the output | environment variable `DICOM_PSEUDO_KEY` |
-| `-n, --processes` | ✓ | | `0` or `1` = one process, more = folders processed in parallel | `1` |
-| `-t, --timestamp` | | ✓ | `TemporalPositionIdentifier`, `NumberOfTemporalPositions`, `ContentTime`, `AcquisitionTime`, `TimeStamp` | automatic detection (profile 3) |
+| `-l, --link-table` | ✓ | | `.xlsx` or `.csv` file | required |
+| `-k, --key-file` | ✓ | | Key file, created if missing | required |
+| `-n, --processes` | ✓ | | folders processed in parallel | `1` |
+| `-t, --timestamp` | | ✓ | Timestamp DICOM keyword | automatic detection (4D series) |
 
-**Identifiers.** The value is read from the first of these tags that holds a non-empty value:
+## Identifiers
+
+The value is read from the first of these tags that holds a non-empty value:
 
 | Identifier | DICOM tags | Note |
 |---|---|---|
@@ -218,32 +213,15 @@ The profiles are defined in `src/dicom_pseudo/core/config/profiles.json`; tags c
 | `0` | User-defined | The fields of `profile.json` |
 | `1` (default) | Demographics | PatientAge, PatientSex, PatientWeight, PatientSize, PatientSizeCodeSequence, PatientBodyMassIndex |
 | `2` | Demographics + date | Profile 1 + StudyDate, SeriesDate |
-| `3` | 4D data | ContentTime, AcquisitionTime, TimeStamp (GE private 0019,1024), TemporalPositionIdentifier, NumberOfTemporalPositions. No demographics |
+| `3` | 4D data | ContentTime, AcquisitionTime, TimeStamp (GE private 0019,1024), TemporalPositionIdentifier, NumberOfTemporalPositions, needed by `extract` for the time points of 4D series. No demographics |
 | `4` | Machine | Equipment, acquisition and reconstruction parameters, general to the machine and not to the installation or site (below). No demographics |
+| `5` | NIfTI conversion | Temporal and diffusion fields, and the vendor private tags dicom2nifti needs for advanced imaging. No demographics. **Can relesase original UIDs and protocol names** |
 
-**Profile 4 (machine).** Only standard DICOM tags; private tags are still removed.
-
-| Category | Fields |
-|---|---|
-| Equipment | ManufacturerModelName, SoftwareVersions, SpatialResolution |
-| MR | SequenceName, ImagedNucleus, NumberOfPhaseEncodingSteps, PercentSampling, PercentPhaseFieldOfView, ReceiveCoilName, TransmitCoilName, VariableFlipAngleFlag, AngioFlag, ParallelAcquisitionTechnique, ParallelReductionFactorInPlane, DiffusionBValue, DiffusionGradientOrientation |
-| CT | FilterType, GeneratorPower, FocalSpots, RevolutionTime, SingleCollimationWidth, TotalCollimationWidth, TableSpeed, TableFeedPerRotation, SpiralPitchFactor, ExposureModulationType, CTDIvol |
-| X-ray (CR/DX/MG) | DetectorType, DetectorConfiguration, AnodeTargetMaterial, FilterMaterial, Grid, DistanceSourceToPatient |
-| PET/NM | ReconstructionMethod, AttenuationCorrectionMethod, ScatterCorrectionMethod, RandomsCorrectionMethod, CountsSource, CollimatorType |
+A new predefined profile is added by adding an entry to `profiles.json`: `"6": {"description": "...", "fields": {...}}`.
 
 ### Fields kept in all profiles
 
 Configured in `src/dicom_pseudo/core/config/fields_to_keep.json` and `groups_to_keep.json`:
-
-| Category | Fields |
-|---|---|
-| File integrity | SpecificCharacterSet, ImageType, Manufacturer, SOPClassUID, SOPInstanceUID |
-| UIDs (pseudonymized) | StudyInstanceUID, SeriesInstanceUID, FrameOfReferenceUID |
-| Image | Modality, SeriesNumber, AcquisitionNumber, InstanceNumber, PatientPosition, ImagePositionPatient, ImageOrientationPatient, SliceLocation, SliceThickness |
-| MR acquisition | ScanningSequence, SequenceVariant, ScanOptions, MRAcquisitionType, RepetitionTime, EchoTime, InversionTime, NumberOfAverages, ImagingFrequency, EchoNumbers, MagneticFieldStrength, SpacingBetweenSlices, EchoTrainLength, PixelBandwidth, AcquisitionMatrix, InPlanePhaseEncodingDirection, FlipAngle |
-| CT / X-ray acquisition | KVP, DataCollectionDiameter, ReconstructionDiameter, DistanceSourceToDetector, GantryDetectorTilt, ExposureTime, XRayTubeCurrent, Exposure, ImagerPixelSpacing, ConvolutionKernel, ViewPosition |
-| PET | Units, DecayCorrection |
-| Image pixel description, pixel data | Groups 0028 and 7FE0 (rows, columns, spacing, rescale, window, pixel data) |
 
 ### User-defined profile (profile 0)
 
@@ -252,9 +230,8 @@ modify_profile          # opens profile.json in the default editor
 modify_profile --path   # prints the path of profile.json
 ```
 
-`profile.json` is a dictionary of DICOM keywords and tags, e.g. `{"PatientAge": "0x00101010", "StudyDate": "StudyDate"}`.
+`profile.json` is a dictionary of DICOM keywords and tags.
 Tags can be looked up in the [DICOM standard](https://dicom.nema.org/medical/dicom/current/output/chtml/part06/chapter_6.html).
-A new predefined profile is added by adding an entry to `profiles.json`: `"5": {"description": "...", "fields": {...}}`.
 
 ## Python API
 
@@ -271,7 +248,7 @@ pseudonymization(
     output_root='/release/dicom',             # outside the input
     profile=1,                                # 0-4
     identifier='PatientID',                   # PatientID, StudyID, AccessionNumber, AgfaID
-    key_file='/secrets/project.key',          # None: environment variable DICOM_PSEUDO_KEY
+    key_file='/secrets/project.key',          # .key, outside the output
     link_table='/secrets/linking_table.xlsx', # .xlsx or .csv, outside the output
     linkage='patient',                        # 'patient' or 'study'
     processes=1,                              # more than 1: folders processed in parallel
@@ -281,8 +258,8 @@ pseudonymization(
 extraction(
     input_root='/release/dicom',              # pseudonymized DICOM files (folder or single file)
     output_root='/release/nifti',             # same folder structure as the input
-    profile=1,                                # metadata fields; profile 3: 4D reconstruction
-    time_stamp=None,                          # None: automatic, or e.g. 'NumberOfTemporalPositions'
+    profile=1,                                # metadata fields written to metadata.json
+    time_stamp=None,                          # time points of 4D series: None = automatic
     progress_bar=True,
 )
 ```
@@ -308,7 +285,7 @@ The `examples/` folder contains scripts that can be run on your own data:
 
 | Script | Content |
 |---|---|
-| `01_command_line.sh DICOM_FOLDER WORK_FOLDER` | Pseudonymized DICOM files and NIfTI images extracted from them (2D/3D with profile 1, 4D with profile 3), from the command line |
+| `01_command_line.sh DICOM_FOLDER WORK_FOLDER` | Pseudonymized DICOM files and NIfTI images extracted from them (2D/3D from profile 1 data, 4D from profile 3 data), from the command line |
 | `02_python_api.py DICOM_FOLDER WORK_FOLDER` | Pseudonymization and extraction with the Python API, then a summary of the linking table and the NIfTI overview |
 
 Each script writes `WORK_FOLDER/secrets/` (key, linking tables: keep, don't share) and `WORK_FOLDER/release/` (data to share).
@@ -337,8 +314,38 @@ compare FILE1 FILE2 [-t TOLERANCE]
 Compares two NIfTI files, header fields and voxel values (within `TOLERANCE`, default `1e-5`). 
 For example, convert a series from the original and from the pseudonymized DICOM files and check that the images are identical.
 
+## Tests
+
+```bash
+pip install -e '.[test]'
+pytest
+```
+
+The tests in `tests/` run on DICOM files built from the pydicom example data (patients, studies and series from the pydicom DICOMDIR test files, synthetic 3D and 4D series, 2D projections, overlays, private elements, broken files, duplicates). They cover:
+
+- settings and profiles
+- keys, pseudonyms and pseudonymized UIDs
+- tables that open in Excel
+- the pseudonymization: no original values outside the kept fields, original pixel data, UIDs and references, linking table, reruns, study linkage, run lock, command line
+- parallel processing: same results as one process, folders sharing a lock never processed together
+- the extraction: input structure reproduced, 2D/3D/4D images, time points, same images from the original and the pseudonymized files
+
+The tests marked `real_data` also run on a sample of a real dataset: 14 series (about 1000 files) from several manufacturers, with Siemens mosaics and 2D, 3D and 4D series, chosen automatically. By default the dataset is `../_data/ibash_learners`, next to the repository; set the `DICOM_PSEUDO_TEST_DATA` environment variable to use another one. These tests are skipped when the dataset is absent. They check:
+
+- profile 1 leaves no original values, UIDs or private elements
+- profile 5 leaves no identity, including in the vendor private headers
+- the extraction of profile 5 data gives the same images as the original data
+- with profile 1, Siemens mosaics are reported, not written as 2D tiles
+- `-n 4` gives the same results as `-n 1`
+
+The sample is pseudonymized with a new test key, assertion messages show only counts and field names, and all derived data is deleted at the end. They take about a minute; to skip them:
+
+```bash
+pytest -m "not real_data"
+```
+
 ## Limitations
 
-- **Private tags** are removed. Vendor-specific information they hold is therefore not available in the pseudonymized DICOM files (e.g. Siemens mosaic images can't be unpacked from them: `extract` writes them as 2D images, or reports them for 4D); 
+- **Private tags** are removed (except those kept by profile 5). Vendor-specific information they hold is therefore not available in the pseudonymized DICOM files: e.g. Siemens mosaic and Philips single-frame fMRI/diffusion can't be converted to NIfTI from them (`extract` reports them), and diffusion b-values and directions are lost. 
 - **`extract` on raw data** doesn't pseudonymize: folder names and the profile's fields are copied as they are. 
 - **NIfTI conversion** depends on dicom2nifti for volumes: series it rejects (inconsistent slice spacing, multi-frame 2D, ...) are reported and not written.

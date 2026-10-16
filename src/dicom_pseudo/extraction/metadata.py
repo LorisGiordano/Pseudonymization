@@ -68,7 +68,9 @@ def get_metadata(dicom_data: pydicom.dataset.Dataset, fields: dict) -> dict:
         - metadata: dict = metadata (JSON serializable)
     """
 
-    return {keyword: json_value(dicom_data[tag].value) for keyword, tag in fields.items() if tag in dicom_data}
+    # binary values (e.g. vendor private headers) are not readable metadata: only their size is written
+    return {keyword: f'<binary, {len(dicom_data[tag].value or b"")} bytes>' if dicom_data[tag].VR in ('OB', 'OW', 'UN') else json_value(dicom_data[tag].value)
+            for keyword, tag in fields.items() if tag in dicom_data}
 
 def write_metadata(metadata: dict, output_directory: str) -> None:
     """

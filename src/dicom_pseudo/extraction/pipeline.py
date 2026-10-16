@@ -88,7 +88,7 @@ def group_by_folder_and_series(dicom_files: list[str], input_folder: str) -> dic
             series[os.path.normpath(os.path.join(folder, subfolder))] = folder_series[series_uid]
     return series
 
-def extract_series(files: list, output_directory: str, fields: dict, four_d: bool = False, time_stamp: str = None) -> dict:
+def extract_series(files: list, output_directory: str, fields: dict, time_stamp: str = None) -> dict:
     """
     Extract the image(s) and metadata of one series:
         - the NifTi image(s) (see nifti.write_nifti)
@@ -98,8 +98,7 @@ def extract_series(files: list, output_directory: str, fields: dict, four_d: boo
         - files: list = (path, dataset) of the series, sorted by InstanceNumber
         - output_directory: str = path to output folder of the series
         - fields: dict = fields of the profile stored as metadata (see metadata.profile_fields)
-        - four_d: bool = whether to reconstruct 4D data (default = False)
-        - time_stamp: str = DICOM keyword to be used for 4D data reconstruction (default = None => automatic)
+        - time_stamp: str = DICOM keyword to be used for the time points of 4D series (default = None => automatic)
 
     Outputs:
         - overview: dict = overview of the series (NifTi information and metadata)
@@ -107,7 +106,7 @@ def extract_series(files: list, output_directory: str, fields: dict, four_d: boo
 
     dicom_data = files[0][1]
     os.makedirs(output_directory, exist_ok=True)
-    information = write_nifti(files, output_directory, four_d, time_stamp)
+    information = write_nifti(files, output_directory, time_stamp)
     metadata = get_metadata(dicom_data, fields)
     write_metadata(metadata, output_directory)
 
@@ -126,9 +125,8 @@ def extraction(input_root: str, output_root: str, profile: int = 1, time_stamp: 
     Inputs:
         - input_root: str = path to root of all DICOM folders (or to a single DICOM file)
         - output_root: str = path to output folder
-        - profile: int = number corresponding to profile to be selected: fields stored as metadata, 4D reconstruction
-                         for profile 3 (default = 1)
-        - time_stamp: str = DICOM keyword to be used for 4D data reconstruction (default = None => automatic)
+        - profile: int = number corresponding to profile to be selected: fields stored as metadata (default = 1)
+        - time_stamp: str = DICOM keyword to be used for the time points of 4D series (default = None => automatic)
         - progress_bar: bool = (default = PROGRESS_BAR)
     """
 
@@ -149,7 +147,7 @@ def extraction(input_root: str, output_root: str, profile: int = 1, time_stamp: 
     try:
         for folder, files in (tqdm(series.items()) if progress_bar else series.items()):
             try:
-                row = extract_series(files, os.path.join(output_root, folder), fields, profile == 3, time_stamp)
+                row = extract_series(files, os.path.join(output_root, folder), fields, time_stamp)
             except Exception as error:
                 failed.append((folder, f'{type(error).__name__}: {error}'))
                 continue
