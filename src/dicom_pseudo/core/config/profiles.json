@@ -86,5 +86,45 @@
                 "CollimatorType": "0x00181181"
             }
         }
+    },
+    "5": {
+        "description": "NIfTI conversion: 4D, diffusion and the vendor private headers needed by dicom2nifti (private headers may contain original UIDs, device serial number, dates and protocol names)",
+        "fields": {
+            "Time stamps and temporal positions (4D)": {
+                "ContentTime": "0x00080033",
+                "AcquisitionTime": "0x00080032",
+                "TemporalPositionIdentifier": "0x00200100",
+                "NumberOfTemporalPositions": "0x00200105"
+            },
+            "Diffusion (standard)": {
+                "DiffusionDirectionality": "0x00189075",
+                "DiffusionBValue": "0x00189087",
+                "DiffusionGradientOrientation": "0x00189089",
+                "MRDiffusionSequence": "0x00189117"
+            },
+            "Multi-frame geometry and timing (standard)": {
+                "SharedFunctionalGroupsSequence": "0x52009229",
+                "PerFrameFunctionalGroupsSequence": "0x52009230"
+            },
+            "Siemens private": {
+                "SiemensBValue": "0x0019100c",
+                "SiemensDiffusionGradientDirection": "0x0019100e",
+                "SiemensCSAImageHeader": "0x00291010",
+                "SiemensCSASeriesHeader": "0x00291020"
+            },
+            "Philips private": {
+                "PhilipsBValue": "0x20011003",
+                "PhilipsSliceNumber": "0x2001100a",
+                "PhilipsDiffusionDirectionRL": "0x200510b0",
+                "PhilipsDiffusionDirectionAP": "0x200510b1",
+                "PhilipsDiffusionDirectionFH": "0x200510b2"
+            },
+            "GE private": {
+                "GEBValue": "0x00431039",
+                "GEDiffusionDirectionX": "0x001910bb",
+                "GEDiffusionDirectionY": "0x001910bc",
+                "GEDiffusionDirectionZ": "0x001910bd"
+            }
+        }
     }
 }
