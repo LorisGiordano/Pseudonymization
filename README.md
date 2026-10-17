@@ -1,4 +1,6 @@
-# dicom_pseudo
+# dicom-pseudo
+
+![image](./.images/Overview.png)
 
 Pseudonymization of DICOM datasets for research. The package provides two pipelines, which you can use from the
 command line or as a Python API:
@@ -349,3 +351,7 @@ pytest -m "not real_data"
 - **Private tags** are removed (except those kept by profile 5). Vendor-specific information they hold is therefore not available in the pseudonymized DICOM files: e.g. Siemens mosaic and Philips single-frame fMRI/diffusion can't be converted to NIfTI from them (`extract` reports them), and diffusion b-values and directions are lost. 
 - **`extract` on raw data** doesn't pseudonymize: folder names and the profile's fields are copied as they are. 
 - **NIfTI conversion** depends on dicom2nifti for volumes: series it rejects (inconsistent slice spacing, multi-frame 2D, ...) are reported and not written.
+
+##
+
+![image](./.images/Organizations.png)
