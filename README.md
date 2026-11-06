@@ -12,7 +12,9 @@ command line or as a Python API:
   It doesn't pseudonymize: run it on the pseudonymized DICOM files.
 
 Pseudonymization writes a **linking table** between original and pseudonymized identifiers, which must be kept separately from the data. 
-Two helper commands complete the toolkit: `redact` removes text burned into the pixel data, and `compare` compares two NIfTI files.
+Two helper commands complete the toolkit: 
+- **Redaction** (`redact`) removes text burned into the pixel data
+- **Comparison** (`compare`) compares two NIfTI files.
 
 Recommended workflow: `pseudonymize` (raw DICOM → pseudonymized DICOM) → optionally `redact` → `extract` (pseudonymized DICOM → NIfTI). 
 The extraction then only sees pseudonymized data, and needs no access to the raw data, the key or the linking table.
@@ -75,17 +77,50 @@ The same key gives the same pseudonyms in later runs.
 
 ## Concepts
 
+### Input files
+
+The input can be a folder, searched recursively, or a single DICOM file. 
+DICOMDIR index files and non-DICOM files (README, reports, …) are ignored and never copied. 
+Damaged files, and files without the chosen identifier, are skipped and listed in `<linking table>_errors.csv`, next to the linking table (it contains original paths: keep it with the linking table).
+
+### Output structure
+
+The default output are `<INPUT>_pseudonymized` and `<INPUT>_extracted`.
+
+`--output OUTPUT` (`dir/`, optional) can be set to choose the output directory. The output directory can never be a sub-directory of the input directory.
+
+Pseudonymized output folders and file names are rebuilt from pseudonymized values only. 
+`extract` reproduces the structure of its input, so applied to the pseudonymized files it writes the NIfTI images to the same folders.
+
+```
+OUTPUT/<Pseudo_Identifier[:32]>/<Pseudo_StudyInstanceUID>/<Pseudo_SeriesInstanceUID>/
+```
+
 ### Secret key and pseudonyms
 
 Pseudonyms are keyed hashes (HMAC-SHA256) of the original identifier. 
-Without the key, they can't be recomputed, and low-entropy identifiers such as numeric patient IDs can't be recovered by trying every possible value.
 
-`--key-file PATH` reads the key from a file, or creates a new random key file (readable only by its owner) if it
+`--key-file PATH` (`.key`, required) reads the key from a file, or creates a new random key file (readable only by its owner) if it
   doesn't exist yet. 
   Alternatively, set the environment variable `DICOM_PSEUDO_KEY`.
 - **The key defines the scope of linkage.** Reuse the same key for all exports of a project, so a patient keeps the same pseudonym. 
   Use a new key for each separate project or data release, so the releases can't be joined with each other.
-- The key file and the linking table are refused if they are inside the output folder.
+- The key file is refused if they are inside the output folder
+- `key-file` is a required argument for every run!
+
+### Link table
+
+`--link-table PATH` (`.xlsx` or `.csv`, required) has one row per DICOM series (and input/output folder). 
+It contains the original identifiers, so treat it like the key. 
+- An existing table is updated: re-running replaces the rows of the same series, and new series are added.
+- The link table is refused if they are inside the output folder.
+- `link-table` is a required argument for every run!
+
+### Identifier
+
+`--identifier IDENTIFIER` (default `PatientID`, optional) choosing the DICOM keyword used as main identifier of the file. 
+
+- Identifiers can be choosen from the [list of identifiers](#identifiers)
 
 ### Linkage: patient or study level
 
@@ -94,7 +129,7 @@ Without the key, they can't be recomputed, and low-entropy identifiers such as n
 `--linkage study` gives one pseudonym per study, computed from the identifier and the original StudyInstanceUID. 
 All UIDs are also mapped per study, so a UID shared between two studies (e.g. a frame of reference) is replaced differently in each. 
 - Studies of the same patient then can't be linked in the released data. 
-- The linking table still lists the patient-level pseudonym of each study, so the key holder can re-link them.
+- The link table still lists the patient-level pseudonym of each study, so the key holder can re-link them.
 
 ### DICOM information
 
@@ -108,38 +143,7 @@ All UIDs are also mapped per study, so a UID shared between two studies (e.g. a 
 | Pixel data | Unchanged (to redact burned-in text, see [`redact`](#redact-burned-in-text)) |
 | All other fields | Emptied (zero-length value, so the file structure stays valid); sequences keep only their UIDs |
 | De-identification flags | `PatientIdentityRemoved = YES`; `DeidentificationMethod` records the tool version, profile, identifier and linkage |
-### Input files
 
-The input can be a folder, searched recursively, or a single DICOM file. 
-DICOMDIR index files and non-DICOM files (README, reports, …) are ignored and never copied. 
-Damaged files, and files without the chosen identifier, are skipped: the first ones are listed at the end of the run, and all of them in `<linking table>_errors.csv`, next to the linking table (it contains original paths: keep it with the linking table).
-
-### Output structure
-
-Pseudonymized output folders and file names are rebuilt from pseudonymized values only:
-
-```
-OUTPUT/<Pseudo_Identifier[:32]>/<Pseudo_StudyInstanceUID>/<Pseudo_SeriesInstanceUID>/
-```
-
-`extract` reproduces the structure of its input, so applied to the pseudonymized files it writes the NIfTI images to the same folders.
-
-### Linking table
-
-`--link-table PATH` (`.xlsx` or `.csv`, required) has one row per DICOM series (and input/output folder). 
-It contains the original identifiers, so treat it like the key. 
-An existing table is updated: re-running replaces the rows of the same series, and new series are added.
-
-| Column | Content |
-|---|---|
-| `Original <identifier>` | Original identifier value |
-| `Pseudonym <identifier>` | Pseudonym written in the data (patient or study level) |
-| `Patient pseudonym <identifier>` | Patient-level pseudonym (allows re-linking study-level data) |
-| `Linkage` | `patient` or `study` |
-| `Original / Pseudonymized StudyInstanceUID`, `… SeriesInstanceUID` | Original and pseudonymized UIDs |
-| `Modality`, `SeriesNumber`, `SeriesDescription`, `BurnedInAnnotation` | From the original data |
-| `Input folder`, `Output folder` | Relative input folder(s) and pseudonymized output folder |
-| `Number of files` | Number of DICOM files of the series |
 
 ## Pseudonymization: `pseudonymize`
 
